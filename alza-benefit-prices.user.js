@@ -3,7 +3,7 @@
 // @icon         https://www.alza.cz/favicon-alza.ico
 // @author       Dexnis
 // @namespace    local.alza-ceny
-// @version      1.2.0
+// @version      1.2.1
 // @updateURL    https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @downloadURL  https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @description  Userscript pro Alza.cz a Alza.sk, který přímo na stránce produktu zobrazí ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic včetně procentuálních slev.
@@ -79,7 +79,7 @@
     { name: 'B2B', pgrik: 'p_pg6_6ce49', badge: 'isic' },
     { name: 'Basic', pgrik: 'p__26752', reference: true, badge: 'regular' },
   ];
-  const [saved, savedPlus, savedCashback, savedCashbackPrice, savedTradeIn, savedAlways, savedBelowPhoto] = await Promise.all([
+  const [saved, savedPlus, savedCashback, savedCashbackPrice, savedTradeIn, savedAlways, savedBelowPhoto, savedIdp] = await Promise.all([
     getSetting('enabled-price-tiers', {}),
     getSetting('alza-plus-promos', true),
     getSetting('cashback-promos', true),
@@ -87,6 +87,7 @@
     getSetting('trade-in-promos', null),
     getSetting('always-show-tiers', false),
     getSetting('panel-below-photo', false),
+    getSetting('affiliate-idp', ''),
   ]);
   const enabled = Object.fromEntries(TIERS.map(tier => [tier.name,
     (tier.name === 'Basic' ? saved?.Basic ?? saved?.BASIC ?? saved?.['Běžná cena'] : saved?.[tier.name]) !== false,
@@ -97,6 +98,8 @@
   let alwaysShow = savedAlways === true;
   let belowPhoto = savedBelowPhoto === true;
   let belowPhotoOption = null;
+  // Affiliate ID added to the copied link as ?idp=<number>; digits only.
+  let affiliateId = String(savedIdp ?? '').replace(/\D/g, '').slice(0, 12);
   let activeId = null;
   let generation = 0;
   let panel = null;
@@ -389,6 +392,11 @@
       .settings-options{display:grid;width:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 16px}
       .view-options{grid-template-columns:minmax(0,1fr)}
       .option-row{display:flex;align-items:center;gap:8px}
+      .idp-wrap{position:relative;display:inline-flex;align-items:center}
+      .idp-clear{position:absolute;right:4px;width:22px;height:22px;padding:0;border:0;border-radius:50%;background:transparent;color:#6b6b6b;font-size:16px;line-height:1;cursor:pointer}
+      .idp-clear:hover{background:#f0f0f0;color:#000}
+      .idp-clear:focus-visible{outline:2px solid #545fef;outline-offset:1px}
+      .settings .idp-input{width:110px;height:30px;padding:0 28px 0 8px;border:1px solid #c2c2c2;border-radius:8px;background:#fff;color:#000;font-size:13px}
       .help{flex-shrink:0;width:22px;height:22px;padding:0;border:1px solid #e8e8e8;border-radius:50%;background:#fff;color:#6b6b6b;font-size:12px;font-weight:600;line-height:1;cursor:pointer}
       .help:hover,.help[aria-expanded="true"]{background:#f5f5f5;color:#000}
       .help:focus-visible{outline:2px solid #545fef;outline-offset:2px}
@@ -520,6 +528,7 @@
         const variant = url.searchParams.get('dq');
         url.search = '';
         if (variant !== null) url.searchParams.set('dq', variant);
+        if (affiliateId) url.searchParams.set('idp', affiliateId);
         url.hash = '';
         lines.push('', 'Odkaz ➤ ' + url.href);
         const text = lines.join('\n');
@@ -621,6 +630,59 @@
         mount(host);
       });
     belowPhotoOption.hidden = true;
+    const linkSettings = node('fieldset', null, settings);
+    linkSettings.className = 'settings-actions';
+    node('legend', 'Affiliate', linkSettings);
+    const idpRow = node('div', null, linkSettings);
+    idpRow.className = 'option-row';
+    const idpWrap = node('span', null, idpRow);
+    idpWrap.className = 'idp-wrap';
+    const idpInput = node('input', null, idpWrap);
+    idpInput.setAttribute('aria-label', 'Affiliate');
+    idpInput.type = 'text';
+    idpInput.inputMode = 'numeric';
+    idpInput.maxLength = 12;
+    idpInput.placeholder = '1234';
+    idpInput.className = 'idp-input';
+    idpInput.value = affiliateId;
+    const idpClear = node('button', '×', idpWrap);
+    idpClear.className = 'idp-clear';
+    idpClear.type = 'button';
+    idpClear.title = 'Smazat';
+    idpClear.setAttribute('aria-label', 'Smazat affiliate');
+    idpClear.hidden = !affiliateId;
+    const idpHelp = node('button', '?', idpRow);
+    idpHelp.className = 'help';
+    idpHelp.type = 'button';
+    idpHelp.title = 'Co to je';
+    idpHelp.setAttribute('aria-label', 'Co je affiliate');
+    idpHelp.setAttribute('aria-expanded', 'false');
+    const idpHint = node('p', 'Číslo partnera, které se přidá do kopírovaného odkazu jako ?idp=číslo.', linkSettings);
+    idpHint.className = 'hint';
+    idpHint.id = 'hint-affiliate';
+    idpHint.style.marginLeft = '0';
+    idpHint.hidden = true;
+    idpHelp.setAttribute('aria-controls', idpHint.id);
+    idpHelp.onclick = () => {
+      idpHint.hidden = !idpHint.hidden;
+      idpHelp.setAttribute('aria-expanded', String(!idpHint.hidden));
+    };
+    function saveAffiliate() {
+      affiliateId = idpInput.value;
+      idpClear.hidden = !affiliateId;
+      saveSetting('affiliate-idp', affiliateId);
+    }
+    idpInput.oninput = () => {
+      const digits = idpInput.value.replace(/\D/g, '');
+      if (digits !== idpInput.value) idpInput.value = digits;
+      idpClear.hidden = !digits;
+    };
+    idpInput.onchange = saveAffiliate;
+    idpClear.onclick = () => {
+      idpInput.value = '';
+      saveAffiliate();
+      idpInput.focus();
+    };
     const info = node('div', null, settings);
     info.className = 'settings-info';
     const version = (typeof GM_info !== 'undefined' && GM_info?.script?.version)
