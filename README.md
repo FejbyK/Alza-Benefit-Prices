@@ -35,15 +35,15 @@ Pokud se instalace nenabídne, zkopíruj celý obsah skriptu do editoru Userscri
 
 - **Ceníky:** zapnutí a vypnutí jednotlivých ceníků.
 - **Akce:** samostatné zapnutí a vypnutí AlzaPlus+, Cashbacku a Výkupu.
-- **Zobrazení:** volba **Zobrazit všechny ceníky** ukáže všechny zapnuté ceníky i tehdy, když mají stejnou cenu (jinak se místo tabulky zobrazí krátká zpráva).
+- **Zobrazení:** volba **Vždy zobrazit ceníky** ukáže všechny zapnuté ceníky, i když u nich není sleva nebo mají všechny stejnou cenu.
   Na počítači přibude i volba **Přesunout ceník doleva**, která panel přesune pod miniatury galerie (na mobilu není dostupná).
-- **Affiliate:** číslo se přidá do kopírovaného odkazu jako `?idp=číslo` (např. `?idp=8435`).
+- **Affiliate:** číslo se přidá do kopírovaného odkazu jako `?idp=číslo` (např. `?idp=1234`).
 
 Nastavení se ukládá automaticky. Skript vybere nejnižší cenu z povolených akcí. Pokud mají všechny načtené ceníky stejnou cenu, zobrazí místo tabulky krátkou zprávu.
 
 ## Kopírování
 
-Tlačítko vedle ozubeného kola zkopíruje nabídku (název, ceny ceníků, slevy, původní cenu a odkaz na produkt) jako text pro vložení do chatu nebo e-mailu.
+Tlačítko vedle ozubeného kola zkopíruje nabídku (název, původní cenu, ceníky se slevou a odkaz na produkt) jako text pro vložení do chatu nebo e-mailu. Kopíruje vždy všechny ceníky, u kterých je sleva, bez ohledu na to, co máš v nastavení zapnuté. Když žádná sleva není, zkopíruje se prostá cena (nebo seznam cen). Silver s ISIC a Bronze s B2B se při stejné ceně spojí do jednoho řádku (`SILVER/ISIC`, `BRONZE/B2B`). Ceníky s různou akcí se rozdělí do bloků, každý s vlastním řádkem akce.
 
 Podporuje také mobilní verze m.alza.cz a m.alza.sk
 
