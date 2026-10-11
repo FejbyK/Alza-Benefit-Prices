@@ -846,7 +846,8 @@
       .map(tier => found.find(item => item?.tier === tier) || { tier, comparison: null });
     const lone = basic ? onlyDifferent(basic.result.amount, others, item => item.comparison?.amount ?? null) : null;
     const stands = Boolean(lone) && tiers.includes(lone);
-    if (entries.length && (discounted(basic) || stands)) {
+    // BASIC (or OSTATNÍ) is listed only with a discount of its own, as in the table.
+    if (entries.length && discounted(basic)) {
       entries.push({ tier: basic.tier, names: [stands ? 'OSTATNÍ' : 'BASIC'], amount: basic.result.amount, result: basic.result });
     } else if (!entries.length && discounted(basic)) {
       entries = [{ names: [], amount: basic.result.amount, result: basic.result }];
@@ -999,7 +1000,8 @@
     if (lone && !lone.tr.hidden) {
       basic.displayName = 'OSTATNÍ';
       if (basic.badge) basic.badge.textContent = basic.displayName;
-      basic.tr.hidden = false;
+      // Without a discount of its own OSTATNÍ would only repeat the original price shown below the table.
+      basic.tr.hidden = !(basic.result?.discountPercent > 0);
       // OSTATNÍ already stands for every tier priced like BASIC.
       for (const row of compared) if (row.valid && row.amount === basic.amount) row.tr.hidden = true;
     }
