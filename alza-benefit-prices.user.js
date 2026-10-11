@@ -3,7 +3,7 @@
 // @icon         https://www.alza.cz/favicon-alza.ico
 // @author       Dexnis
 // @namespace    local.alza-ceny
-// @version      1.2.2
+// @version      1.2.3
 // @updateURL    https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @downloadURL  https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @description  Userscript pro Alza.cz a Alza.sk, který přímo na stránce produktu zobrazí ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic včetně procentuálních slev.
@@ -261,13 +261,33 @@
     }
   }
 
+  // BASIC stands for all the other tiers (shown as OSTATNÍ) when every one of them has a known price
+  // and exactly one differs from BASIC. Used by the table and by the copied offer; returns that tier.
+  function onlyDifferent(basicAmount, others, amountOf) {
+    if (basicAmount == null || others.length < 2) return null;
+    const amounts = others.map(amountOf);
+    if (amounts.some(amount => amount == null)) return null;
+    const distinct = others.filter((item, index) => amounts[index] !== basicAmount);
+    return distinct.length === 1 ? distinct[0] : null;
+  }
+
   function visibleRows(rows) {
     return rows.filter(row => row.valid && !row.tr.hidden).sort((a, b) => a.amount - b.amount);
   }
 
-  async function writeClipboard(text) {
-    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API není dostupné.');
-    await navigator.clipboard.writeText(text);
+  // The write has to start inside the click: Safari refuses it once the click is "used up" by waiting.
+  // ClipboardItem takes the text as a promise, so the write starts at once and gets the text later.
+  async function writeClipboard(textPromise) {
+    const clipboard = navigator.clipboard;
+    if (!clipboard) throw new Error('Clipboard API není dostupné.');
+    if (typeof ClipboardItem === 'function' && typeof clipboard.write === 'function') {
+      try {
+        await clipboard.write([new ClipboardItem({ 'text/plain': textPromise.then(text => new Blob([text], { type: 'text/plain' })) })]);
+        return;
+      } catch { /* Older ClipboardItem without promises: fall back to writeText below. */ }
+    }
+    if (typeof clipboard.writeText !== 'function') throw new Error('Clipboard API není dostupné.');
+    await clipboard.writeText(await textPromise);
   }
 
   // "S kódem X" -> "Ceny s kódem X" (or "Cena s kódem X" for a single price), "Cena s Cashback" -> "Ceny s Cashback".
@@ -406,8 +426,9 @@
   .gear.failed{border-color:#ca0505;color:#ca0505}
   .gear:focus-visible,input:focus-visible,.settings-info a:focus-visible{outline:2px solid #545fef;outline-offset:2px}
   .price-notice{flex:1;color:#606060;font-size:13px}
-  .equal-prices .credit{margin-top:0;padding:0 4px;justify-content:flex-start}
-  .equal-prices .gear{flex-shrink:0}
+  .footer-message .credit{margin-top:0;padding:0 4px;justify-content:flex-start}
+  .footer-message .gear{flex-shrink:0}
+  .load-error{color:#ca0505}
 
   /* Settings */
   .settings{display:grid;gap:16px;padding:0 8px 12px;margin-top:8px}
@@ -515,18 +536,33 @@
     const notice = node('span', 'Všechny ceníky mají stejnou cenu', footer);
     notice.className = 'price-notice';
     notice.hidden = true;
+    // Shown when no tier could be loaded at all (blocked API, network error).
+    const loadError = node('span', 'Ceny se nepodařilo načíst. Zkus obnovit stránku.', footer);
+    loadError.className = 'price-notice load-error';
+    loadError.hidden = true;
     const credit = node('span', 'Vytvořil Dexnis', footer);
     const settings = node('div', null, section);
     // Help for the "?" buttons: a bubble on hover or focus with a mouse; on touch it stays until
     // you tap elsewhere.
     const tip = node('div', null, section);
     tip.className = 'tip';
+    tip.id = 'help-tip';
     tip.hidden = true;
     tip.setAttribute('role', 'tooltip');
     const touchOnly = () => mobile || matchMedia('(hover: none)').matches;
     let tipText = '';
-    function hideTip() { tip.hidden = true; tipText = ''; }
+    let tipButton = null;
+    // The open bubble describes its button, so a screen reader reads it with the button.
+    function hideTip() {
+      tip.hidden = true;
+      tipText = '';
+      tipButton?.removeAttribute('aria-describedby');
+      tipButton = null;
+    }
     function showTip(button, text) {
+      tipButton?.removeAttribute('aria-describedby');
+      tipButton = button;
+      button.setAttribute('aria-describedby', tip.id);
       tipText = text;
       tip.textContent = text;
       tip.hidden = false;
@@ -549,16 +585,19 @@
         else showTip(button, text);
       });
     }
-    // A tap or click anywhere else closes the bubble.
+    // A tap or click anywhere else, or the Escape key, closes the bubble.
     const outside = new AbortController();
     document.addEventListener('pointerdown', event => {
       if (!event.composedPath().some(element => element.classList?.contains('help'))) hideTip();
+    }, { signal: outside.signal, capture: true });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !tip.hidden) hideTip();
     }, { signal: outside.signal, capture: true });
     settings.className = 'settings';
     settings.id = 'price-tier-settings';
     settings.hidden = true;
     gear.setAttribute('aria-controls', settings.id);
-    const state = { dispose: () => outside.abort(), host, rows, table, section, status, priceNote, credit, notice, settings, copy, originalRow, originalPrice, loaded: false };
+    const state = { dispose: () => outside.abort(), host, rows, table, section, status, priceNote, credit, notice, loadError, settings, copy, originalRow, originalPrice, loaded: false };
     let copyReset = 0;
     function setCopyState(label, className) {
       copy.className = className ? 'gear ' + className : 'gear';
@@ -575,60 +614,63 @@
       copyReset = setTimeout(resetCopy, 2000);
     }
     state.resetCopy = resetCopy;
+    // The copied offer ignores which tiers, promos and view are switched on in the panel. It uses the
+    // prices already loaded for the panel (even if older than the cache time) so no network is awaited.
+    async function offerText() {
+      const offer = await buildOffer(id, true);
+      if (id !== activeId) throw new Error('Stránka se mezitím změnila.');
+      if (!offer) throw new Error('Žádná cena ke kopírování.');
+      const title = document.querySelector('h1')?.textContent.trim() || 'Produkt Alza';
+      const lines = ['## ' + title, ''];
+      const original = offer.original !== null ? 'Původní cena: ~~' + formatPrice(offer.original) + '~~' : '';
+      const priceText = entry => formatPrice(entry.amount)
+        + (formatDiscount(entry.result.discountPercent) ? ' (' + formatDiscount(entry.result.discountPercent) + ')' : '');
+      if (offer.single) {
+        // Every tier costs the same and there is no discount: just the price.
+        lines.push('- ' + formatPrice(offer.entries[0].amount));
+      } else {
+        // Rows with the same promo form one block. The original price stands once at the top;
+        // every block with a promo has its own "**➔ Ceny s kódem X:**" line. Rows without a
+        // promo come first, directly under the original price.
+        const groups = [];
+        for (const entry of offer.entries) {
+          const label = promoLabel(entry.result);
+          let group = groups.find(item => item.label === label);
+          if (!group) groups.push(group = { label, entries: [] });
+          group.entries.push(entry);
+        }
+        groups.sort((a, b) => Boolean(a.label) - Boolean(b.label));
+        const blocks = groups.map((group, index) => {
+          const block = [];
+          let header = index === 0 ? original : '';
+          if (group.label) {
+            const arrow = index > 0 || header ? '➔ ' : '';
+            const promo = '**' + arrow + pricesLabel(group.label, group.entries.length === 1) + ':**';
+            header = header ? header + ' ' + promo : promo;
+          }
+          if (header) block.push(header);
+          // A lone OSTATNÍ/BASIC under its own promo header is simply "the price of the others".
+          const bare = Boolean(group.label) && group.entries.length === 1
+            && ['OSTATNÍ', 'BASIC'].includes(group.entries[0].names[0]);
+          for (const entry of group.entries) {
+            block.push('- ' + (entry.names.length && !bare ? '**' + entry.names.join('/') + '**: ' : '') + priceText(entry));
+          }
+          return block.join('\n');
+        });
+        lines.push(blocks.join('\n'));
+      }
+      const url = new URL(location.href);
+      const variant = url.searchParams.get('dq');
+      url.search = '';
+      if (variant !== null) url.searchParams.set('dq', variant);
+      if (affiliateId) url.searchParams.set('idp', affiliateId);
+      url.hash = '';
+      lines.push('', 'Odkaz ➤ ' + url.href);
+      return lines.join('\n');
+    }
     copy.onclick = async () => {
       try {
-        // The copied offer ignores which tiers, promos and view are switched on in the panel.
-        const offer = await buildOffer(id);
-        if (id !== activeId) throw new Error('Stránka se mezitím změnila.');
-        if (!offer) throw new Error('Žádná cena ke kopírování.');
-        const title = document.querySelector('h1')?.textContent.trim() || 'Produkt Alza';
-        const lines = ['## ' + title, ''];
-        const original = offer.original !== null ? 'Původní cena: ~~' + formatPrice(offer.original) + '~~' : '';
-        const priceText = entry => formatPrice(entry.amount)
-          + (formatDiscount(entry.result.discountPercent) ? ' (' + formatDiscount(entry.result.discountPercent) + ')' : '');
-        if (offer.single) {
-          // Every tier costs the same and there is no discount: just the price.
-          lines.push('- ' + formatPrice(offer.entries[0].amount));
-        } else {
-          // Rows with the same promo form one block. The original price stands once at the top;
-          // every block with a promo has its own "**➔ Ceny s kódem X:**" line. Rows without a
-          // promo come first, directly under the original price.
-          const groups = [];
-          for (const entry of offer.entries) {
-            const label = promoLabel(entry.result);
-            let group = groups.find(item => item.label === label);
-            if (!group) groups.push(group = { label, entries: [] });
-            group.entries.push(entry);
-          }
-          groups.sort((a, b) => Boolean(a.label) - Boolean(b.label));
-          const blocks = groups.map((group, index) => {
-            const block = [];
-            let header = index === 0 ? original : '';
-            if (group.label) {
-              const arrow = index > 0 || header ? '➔ ' : '';
-              const promo = '**' + arrow + pricesLabel(group.label, group.entries.length === 1) + ':**';
-              header = header ? header + ' ' + promo : promo;
-            }
-            if (header) block.push(header);
-            // A lone OSTATNÍ/BASIC under its own promo header is simply "the price of the others".
-            const bare = Boolean(group.label) && group.entries.length === 1
-              && ['OSTATNÍ', 'BASIC'].includes(group.entries[0].names[0]);
-            for (const entry of group.entries) {
-              block.push('- ' + (entry.names.length && !bare ? '**' + entry.names.join('/') + '**: ' : '') + priceText(entry));
-            }
-            return block.join('\n');
-          });
-          lines.push(blocks.join('\n'));
-        }
-        const url = new URL(location.href);
-        const variant = url.searchParams.get('dq');
-        url.search = '';
-        if (variant !== null) url.searchParams.set('dq', variant);
-        if (affiliateId) url.searchParams.set('idp', affiliateId);
-        url.hash = '';
-        lines.push('', 'Odkaz ➤ ' + url.href);
-        const text = lines.join('\n');
-        await writeClipboard(text);
+        await writeClipboard(offerText());
         showCopyState('Zkopírováno', 'done');
       } catch (error) {
         showCopyState('Kopírování selhalo — zkus to znovu', 'failed');
@@ -638,7 +680,7 @@
     gear.onclick = () => {
       settings.hidden = !settings.hidden;
       gear.setAttribute('aria-expanded', String(!settings.hidden));
-      section.classList.toggle('settings-only', table.hidden && settings.hidden && notice.hidden);
+      section.classList.toggle('settings-only', table.hidden && settings.hidden && notice.hidden && loadError.hidden);
     };
     // A labelled checkbox; "change" saves a setting and schedules a reload of the prices.
     function addCheckbox(parent, text, checked, onChange) {
@@ -751,10 +793,11 @@
   }
 
   // Raw API data of one tier, from the shared cache or the network. null means the run was superseded.
-  async function tierData(id, tier, run) {
+  // "allowStale" accepts an expired cache entry, so copying never waits for the network.
+  async function tierData(id, tier, run, allowStale = false) {
     const url = apiUrl(id, tier);
     const cached = cache.get(url);
-    if (cached && Date.now() - cached.time < CACHE_TTL) return cached.data;
+    if (cached && (allowStale || Date.now() - cached.time < CACHE_TTL)) return cached.data;
     const response = await request(url, run !== null);
     if (run !== null && run !== generation) return null;
     if (response.responseText.length > 2 * 1024 * 1024) throw new Error('Odpověď API je příliš velká.');
@@ -770,11 +813,11 @@
   }
 
   // The offer to copy: every tier with a discount, whatever tiers, promos or view the user has switched on.
-  async function buildOffer(id) {
+  async function buildOffer(id, allowStale = false) {
     const all = { plus: true, cashback: true, tradeIn: true };
     const found = await Promise.all(TIERS.map(async tier => {
       try {
-        const data = await tierData(id, tier, null);
+        const data = await tierData(id, tier, null, allowStale);
         const result = extractPrice(data, tier.reference, all);
         if (!result) return null;
         // A tier without its own price still has the standard one, which tells whether it equals BASIC.
@@ -799,10 +842,10 @@
     let entries = fold(tiers.sort((a, b) => a.result.amount - b.result.amount).map(item => toEntry(item)));
     // Same rule as the OSTATNÍ row of the table: exactly one tier differs from BASIC, so BASIC
     // stands for all the others.
-    const others = found.filter(item => item && !item.tier.reference);
-    const distinct = others.filter(item => item.comparison && item.comparison.amount !== basic?.result.amount);
-    const stands = basic && others.length === TIERS.length - 1 && others.every(item => item.comparison)
-      && distinct.length === 1 && tiers.includes(distinct[0]);
+    const others = TIERS.filter(tier => !tier.reference)
+      .map(tier => found.find(item => item?.tier === tier) || { tier, comparison: null });
+    const lone = basic ? onlyDifferent(basic.result.amount, others, item => item.comparison?.amount ?? null) : null;
+    const stands = Boolean(lone) && tiers.includes(lone);
     if (entries.length && (discounted(basic) || stands)) {
       entries.push({ tier: basic.tier, names: [stands ? 'OSTATNÍ' : 'BASIC'], amount: basic.result.amount, result: basic.result });
     } else if (!entries.length && discounted(basic)) {
@@ -840,6 +883,8 @@
     state.status.textContent = '';
     state.section.setAttribute('aria-busy', 'true');
     state.originalRow.hidden = true;
+    state.loadError.hidden = true;
+    let failed = 0;
     state.rows.forEach(row => { row.tr.hidden = true; row.valid = false; row.result = null; row.amount = null; row.comparisonAmount = null; row.discount.textContent = '—'; row.price.textContent = 'Načítání…'; });
     async function loadRow(row) {
       try {
@@ -872,6 +917,7 @@
         row.tr.hidden = false;
       } catch (error) {
         if (run !== generation) return;
+        failed++;
         row.tr.hidden = true;
         console.warn('[Alza Benefit Prices] ' + row.tier.name + ': ' + error.message);
       }
@@ -907,10 +953,13 @@
       state.section.classList.toggle('shared-promo', Boolean(sharedPromo));
       state.table.hidden = !hasPrices;
       state.credit.hidden = !hasPrices;
+      // Nothing loaded and at least one request failed: tell the user instead of showing an empty panel.
+      const loadFailed = failed > 0 && !state.rows.some(row => row.valid || row.comparisonAmount !== null);
       state.notice.hidden = !showNotice;
-      state.section.classList.toggle('equal-prices', showNotice);
-      state.section.classList.toggle('settings-only', !hasPrices && !showNotice && state.settings.hidden);
-      state.status.textContent = showNotice ? state.notice.textContent
+      state.loadError.hidden = !loadFailed;
+      state.section.classList.toggle('footer-message', showNotice || loadFailed);
+      state.section.classList.toggle('settings-only', !hasPrices && !showNotice && !loadFailed && state.settings.hidden);
+      state.status.textContent = loadFailed ? state.loadError.textContent : showNotice ? state.notice.textContent
         : hasPrices ? 'Ceny načteny: ' + sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') : '';
       state.section.setAttribute('aria-busy', 'false');
       state.loaded = true;
@@ -946,9 +995,8 @@
     foldPairs(rows.filter(row => row.valid && !row.tr.hidden), mergeRow);
     if (alwaysShow) return;
     const compared = rows.filter(row => !row.tier.reference && enabled[row.tier.name]);
-    const distinct = compared.filter(row => row.comparisonAmount !== basic?.amount);
-    if (basic?.valid && compared.length > 1 && compared.every(row => row.comparisonAmount !== null)
-      && distinct.length === 1 && !distinct[0].tr.hidden) {
+    const lone = basic?.valid ? onlyDifferent(basic.amount, compared, row => row.comparisonAmount) : null;
+    if (lone && !lone.tr.hidden) {
       basic.displayName = 'OSTATNÍ';
       if (basic.badge) basic.badge.textContent = basic.displayName;
       basic.tr.hidden = false;
