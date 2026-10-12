@@ -110,7 +110,7 @@
 
   function apiUrl(id, tier) {
     const url = new URL(`https://webapi.alza.cz/api/commodity/v1/${id}/detailPriceInfoV3`);
-    url.search = new URLSearchParams({ country, pgrik: tier.pgrik, ucik: 'GB' });
+    url.search = new URLSearchParams({ country, pgrik: tier.pgrik, ucik: 'null' });
     return url.href;
   }
 
