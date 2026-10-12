@@ -39,6 +39,8 @@ Pokud se instalace nenabídne, zkopíruj celý obsah skriptu do editoru Userscri
   Na počítači přibude i volba **Přesunout ceník doleva**, která panel přesune pod miniatury galerie (na mobilu není dostupná).
 - **Affiliate:** číslo se přidá do kopírovaného odkazu jako `?idp=číslo` (např. `?idp=1234`).
 
+Když Alza při cashbacku vrátí ceníku ISIC stejnou cenu jako Basic, přestože má ISIC vlastní slevu, skript cenu dopočítá jako vlastní cenu ISIC mínus cashback (stejně jako u ostatních ceníků).
+
 Nastavení se ukládá automaticky. Skript vybere nejnižší cenu z povolených akcí. Pokud mají všechny načtené ceníky stejnou cenu, zobrazí místo tabulky krátkou zprávu.
 
 ## Kopírování

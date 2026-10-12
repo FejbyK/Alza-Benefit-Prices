@@ -96,6 +96,7 @@
       colTier: 'ceník', colPrice: 'cena', colDiscount: 'sleva', colPromo: 'akce',
       logOriginal: 'Původní cena: ', logAlways: ' | režim: vždy zobrazit ceníky',
       pricesLoaded: 'Ceny načteny: ', logLoading: ': načítám ceníky.',
+      isicEstimate: 'ISIC: API vrací při cashbacku stejnou cenu jako pro Basic, cena dopočtena (cena ISIC − cashback): ',
     },
     sk: {
       others: 'OSTATNÉ',
@@ -141,6 +142,7 @@
       colTier: 'cenník', colPrice: 'cena', colDiscount: 'zľava', colPromo: 'akcia',
       logOriginal: 'Pôvodná cena: ', logAlways: ' | režim: vždy zobraziť cenníky',
       pricesLoaded: 'Ceny načítané: ', logLoading: ': načítavam cenníky.',
+      isicEstimate: 'ISIC: API pri cashbacku vracia rovnakú cenu ako pre Basic, cena dopočítaná (cena ISIC − cashback): ',
     },
   };
   const T = TEXTS[country === 'SK' ? 'sk' : 'cs'];
@@ -293,6 +295,7 @@
       selected.discountPercent = discountBase && discountBase.amount > 0 && discountBase.amount > selected.amount
         ? (discountBase.amount - selected.amount) / discountBase.amount * 100 : null;
       selected.discountBaseAmount = discountBase?.amount ?? null;
+      selected.mainAmount = mainCandidate?.amount ?? null;
     }
     return selected;
   }
@@ -368,6 +371,24 @@
 
   function formatDiscount(percent) {
     return percent > 0 ? '−' + discountFormat.format(percent) + ' %' : '';
+  }
+
+  // Alza's API gives ISIC the very same cashback price as BASIC, so the ISIC discount is lost. When ISIC
+  // has a discount of its own and its cashback price equals BASIC's, the price is worked out like for the
+  // other tiers: ISIC's own price minus the cashback amount that BASIC gets (its price minus its cashback
+  // price). Returns the same object when nothing applies.
+  function estimateIsicCashback(isic, basic) {
+    const cashback = result => result?.promo && result.priceType === 1;
+    if (!cashback(isic) || !cashback(basic) || isic.amount !== basic.amount) return isic;
+    if (!(isic.mainAmount > 0 && basic.mainAmount > 0 && isic.mainAmount < basic.mainAmount)) return isic;
+    const cashbackAmount = basic.mainAmount - basic.amount;
+    const raw = isic.mainAmount - cashbackAmount;
+    if (!(cashbackAmount > 0 && raw > 0)) return isic;
+    const amount = country === 'SK' ? Math.round(raw * 100) / 100 : Math.round(raw);
+    const base = isic.discountBaseAmount;
+    const percent = base > amount ? (base - amount) / base * 100 : null;
+    log(T.isicEstimate + formatPrice(amount) + (percent ? ' (' + formatDiscount(percent) + ')' : ''));
+    return { ...isic, amount, price: formatPanelPrice(amount), discountPercent: percent, estimated: true };
   }
 
   // Tiers that share one row when their prices match: ISIC joins Silver, B2B joins Bronze.
@@ -970,6 +991,11 @@
       }
     }));
     const basic = found.find(item => item?.tier.reference);
+    const isicItem = found.find(item => item?.tier.name === 'ISIC');
+    if (isicItem?.result && basic?.result) {
+      const corrected = estimateIsicCashback(isicItem.result, basic.result);
+      if (corrected !== isicItem.result) { isicItem.result = corrected; isicItem.comparison = corrected; }
+    }
     const discounted = item => item?.result?.discountPercent > 0;
     const tiers = found.filter(item => item && !item.tier.reference && discounted(item)
       && (!basic || item.result.amount < basic.result.amount));
@@ -1028,6 +1054,23 @@
     state.loadError.hidden = true;
     let failed = 0;
     state.rows.forEach(row => { row.tr.hidden = true; row.valid = false; row.result = null; row.amount = null; row.comparisonAmount = null; row.discount.textContent = '—'; row.price.textContent = T.loading; });
+    // Writes a price result into the row (also used again when ISIC is corrected).
+    function renderResult(row, result) {
+      row.price.textContent = result.price;
+      row.discount.textContent = '—';
+      if (result.discountPercent !== null) {
+        row.discount.textContent = '';
+        node('span', formatDiscount(result.discountPercent), row.discount).className = 'discount-value';
+      }
+      if (result.promo) {
+        const label = node('span', promoLabel(result), row.price);
+        label.className = 'promo-label';
+      }
+      row.amount = result.amount;
+      row.result = result;
+      row.valid = true;
+      row.tr.hidden = false;
+    }
     async function loadRow(row) {
       try {
         const data = await tierData(id, row.tier, run);
@@ -1046,20 +1089,7 @@
         }
         debug(row.tier.name + ': ' + result.price + (result.promo ? ' ' + promoLabel(result) : '')
           + (result.discountPercent ? ' (' + formatDiscount(result.discountPercent) + ')' : ''));
-        row.price.textContent = result.price;
-        row.discount.textContent = '—';
-        if (result.discountPercent !== null) {
-          row.discount.textContent = '';
-          node('span', formatDiscount(result.discountPercent), row.discount).className = 'discount-value';
-        }
-        if (result.promo) {
-          const label = node('span', promoLabel(result), row.price);
-          label.className = 'promo-label';
-        }
-        row.amount = result.amount;
-        row.result = result;
-        row.valid = true;
-        row.tr.hidden = false;
+        renderResult(row, result);
       } catch (error) {
         if (run !== generation) return;
         failed++;
@@ -1072,6 +1102,15 @@
     if (run !== generation) return;
     const basic = state.rows.find(row => row.tier.reference);
     if (basic && state.rows.some(row => !row.tier.reference && row.comparisonAmount !== null)) await loadRow(basic);
+    if (run !== generation) return;
+    const isicRow = state.rows.find(row => row.tier.name === 'ISIC');
+    if (isicRow?.valid && basic?.valid) {
+      const corrected = estimateIsicCashback(isicRow.result, basic.result);
+      if (corrected !== isicRow.result) {
+        renderResult(isicRow, corrected);
+        isicRow.comparisonAmount = corrected.amount;
+      }
+    }
     if (run === generation) {
       filterRows(state.rows);
       // Reorder the DOM only so ties keep the configured tier order.
