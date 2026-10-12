@@ -47,4 +47,4 @@ Tlačítko vedle ozubeného kola zkopíruje nabídku (název, původní cenu, ce
 
 Podporuje také mobilní verze m.alza.cz a m.alza.sk
 
-Vytvořil Dexnis
+Vytvořil [Dexnis](https://github.com/dexnis-dev)

@@ -424,7 +424,7 @@
   .gear:hover,.gear[aria-expanded="true"]{background:#f5f5f5;color:#000}
   .gear.done{background:#e9f7e1;border-color:#5dbd2f;color:#2f7a12}
   .gear.failed{border-color:#ca0505;color:#ca0505}
-  .gear:focus-visible,input:focus-visible,.settings-info a:focus-visible{outline:2px solid #545fef;outline-offset:2px}
+  .gear:focus-visible,input:focus-visible,.settings-info a:focus-visible,.credit a:focus-visible{outline:2px solid #545fef;outline-offset:2px}
   .price-notice{flex:1;color:#606060;font-size:13px}
   .footer-message .credit{margin-top:0;padding:0 4px;justify-content:flex-start}
   .footer-message .gear{flex-shrink:0}
@@ -451,7 +451,7 @@
   .tip{position:absolute;z-index:10;padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;background:#f5f5f5;color:#000;font-size:12px;line-height:1.5;pointer-events:none;text-wrap:pretty;box-shadow:0 4px 16px rgba(0,0,0,.12)}
   .settings-group{padding-top:12px!important;border-top:1px solid #e8e8e8!important}
   .settings-info{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding-top:12px;border-top:1px solid #e8e8e8;color:#6b6b6b;font-size:12px}
-  .settings-info a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+  .settings-info a,.credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
   .settings-only{border:0;padding:0}
   .settings-only .credit{margin-top:0;justify-content:flex-end}
 
@@ -540,7 +540,11 @@
     const loadError = node('span', 'Ceny se nepodařilo načíst. Zkus obnovit stránku.', footer);
     loadError.className = 'price-notice load-error';
     loadError.hidden = true;
-    const credit = node('span', 'Vytvořil Dexnis', footer);
+    const credit = node('span', 'Vytvořil ', footer);
+    const creditLink = node('a', 'Dexnis', credit);
+    creditLink.href = 'https://github.com/dexnis-dev';
+    creditLink.target = '_blank';
+    creditLink.rel = 'noopener noreferrer';
     const settings = node('div', null, section);
     // Help for the "?" buttons: a bubble on hover or focus with a mouse; on touch it stays until
     // you tap elsewhere.
