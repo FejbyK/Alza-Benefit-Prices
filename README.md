@@ -41,9 +41,15 @@ Pokud se instalace nenabídne, zkopíruj celý obsah skriptu do editoru Userscri
 
 Nastavení se ukládá automaticky. Skript vybere nejnižší cenu z povolených akcí. Pokud mají všechny načtené ceníky stejnou cenu, zobrazí místo tabulky krátkou zprávu.
 
+## Ladění
+
+Skript vypisuje do konzole prohlížeče (F12) přehledné zprávy s předponou **Alza Benefit Prices** – verzi, načtené produkty a ceny, umístění panelu a změny nastavení. Podrobnosti o jednotlivých dotazech jsou na úrovni *Verbose*. Číslo affiliate se do konzole nevypisuje.
+
 ## Kopírování
 
 Tlačítko vedle ozubeného kola zkopíruje nabídku (název, původní cenu, ceníky se slevou a odkaz na produkt) jako text pro vložení do chatu nebo e-mailu. Kopíruje vždy všechny ceníky, u kterých je sleva, bez ohledu na to, co máš v nastavení zapnuté. Když žádná sleva není, zkopíruje se prostá cena (nebo seznam cen). Silver s ISIC a Bronze s B2B se při stejné ceně spojí do jednoho řádku (`SILVER/ISIC`, `BRONZE/B2B`). Ceníky s různou akcí se rozdělí do bloků, každý s vlastním řádkem akce.
+
+Na Alza.sk se panel, kopírovaný text i zprávy v konzoli zobrazují slovensky (texty jsou v bloku `TEXTS` na začátku skriptu).
 
 Podporuje také mobilní verze m.alza.cz a m.alza.sk
 

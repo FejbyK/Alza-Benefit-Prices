@@ -3,7 +3,7 @@
 // @icon         https://www.alza.cz/favicon-alza.ico
 // @author       Dexnis
 // @namespace    local.alza-ceny
-// @version      1.2.3
+// @version      1.2.4
 // @updateURL    https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @downloadURL  https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @description  Userscript pro Alza.cz a Alza.sk, který přímo na stránce produktu zobrazí ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic včetně procentuálních slev.
@@ -46,29 +46,141 @@
   const locale = country === 'SK' ? 'sk-SK' : 'cs-CZ';
   const discountFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const priceFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+  // Euro cents always have two digits, as on Alza.sk: "54,90 €", not "54,9 €".
+  const centsFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const mobile = /^m\.alza\.(?:cz|sk)$/i.test(location.hostname);
+
+  // All texts of the panel, the copied offer and the console. alza.sk gets the Slovak ones.
+  const TEXTS = {
+    cs: {
+      others: 'OSTATNÍ',
+      noStorage: 'Rozšíření neposkytuje ukládání nastavení. Zkontroluj oprávnění skriptu.',
+      noStorageWrite: 'Rozšíření neposkytuje ukládání nastavení.',
+      logSetting: 'Nastavení ', settingOn: 'nastaveno', settingOff: 'smazáno',
+      saveFailed: 'Nastavení se nepodařilo uložit: ',
+      logVersion: 'Verze ', logMobile: ' (mobilní verze)', logCountry: ', země ', logSettings: 'Nastavení',
+      cancelled: 'Načítání zrušeno.',
+      requestError: 'Rozšíření nedokázalo načíst API. Zkontroluj přístup k webapi.alza.cz.',
+      timeout: 'Alza neodpověděla do 20 sekund.',
+      noRequest: 'Rozšíření neposkytuje načítání API. Zkontroluj oprávnění skriptu.',
+      noClipboard: 'Clipboard API není dostupné.',
+      pricesWith: 'Ceny s ', priceWith: 'Cena s ', prices: 'Ceny ', price: 'Cena ',
+      withCode: 'S kódem ', promoDefault: 'Akční cena',
+      placed: 'Panel umístěn ', placedGift: 'pod blokem s dárkem', placedPhoto: 'pod fotkou produktu',
+      placedTracker: 'před Hlídačem shopů', placedModule: 'před modulem alternativních cen', placedPrice: 'pod hlavní cenou',
+      tableLabel: 'Ceny ceníků: ', thTier: 'Ceník', thPrice: 'Cena', thDiscount: 'Sleva',
+      originalPrice: 'Původní cena',
+      settingsTitle: 'Nastavení ceníků', copyOffer: 'Kopírovat nabídku',
+      equalNotice: 'Všechny ceníky mají stejnou cenu',
+      loadError: 'Ceny se nepodařilo načíst. Zkus obnovit stránku.',
+      createdBy: 'Vytvořil ',
+      pageChanged: 'Stránka se mezitím změnila.', nothingToCopy: 'Žádná cena ke kopírování.', productFallback: 'Produkt Alza',
+      originalColon: 'Původní cena: ', link: 'Odkaz ➤ ',
+      copied: 'Zkopírováno', copiedLog: 'Nabídka zkopírována do schránky:',
+      copyFailedTitle: 'Kopírování selhalo — zkus to znovu', copyFailedLog: 'Kopírování selhalo: ',
+      groupTiers: 'Ceníky', groupPromos: 'Akce', tradeIn: 'Výkup', groupView: 'Zobrazení',
+      helpAbout: 'Co dělá volba: ',
+      optAlways: 'Vždy zobrazit ceníky',
+      optAlwaysHint: 'Zobrazí Vaše zapnuté ceníky vždycky, i když není u ceníku sleva nebo jsou všechny ceníky se stejnou cenou.',
+      optLeft: 'Přesunout ceník doleva',
+      optLeftHint: 'Přesune ceník z pravého sloupce pod miniatury fotek vlevo.',
+      clear: 'Smazat', clearAffiliate: 'Smazat affiliate', whatIsAffiliate: 'Co je affiliate',
+      affiliateHint: 'Číslo partnera, které se přidá do kopírovaného odkazu jako ?idp=číslo.',
+      version: 'Verze ', sourceCode: 'Zdrojový kód',
+      staleCache: ': použita starší cache (', tooLarge: 'Odpověď API je příliš velká.', blocked: 'HTTP 403: přístup blokován.',
+      apiHttp: 'API vrátilo HTTP ', redirect: 'API přesměrovalo na jinou doménu.', noPrice: 'Cena v odpovědi nenalezena.',
+      loading: 'Načítání…',
+      noOwnPrice: ': bez vlastní ceny', standard: ' (standardní ',
+      product: 'Produkt ', logNoTier: ': žádný ceník se nenačetl, API je blokované nebo nedostupné.',
+      logEqual: ': všechny ceníky mají stejnou cenu', logNothing: 'žádný ceník ke zobrazení',
+      colTier: 'ceník', colPrice: 'cena', colDiscount: 'sleva', colPromo: 'akce',
+      logOriginal: 'Původní cena: ', logAlways: ' | režim: vždy zobrazit ceníky',
+      pricesLoaded: 'Ceny načteny: ', logLoading: ': načítám ceníky.',
+    },
+    sk: {
+      others: 'OSTATNÉ',
+      noStorage: 'Rozšírenie neposkytuje ukladanie nastavení. Skontroluj oprávnenia skriptu.',
+      noStorageWrite: 'Rozšírenie neposkytuje ukladanie nastavení.',
+      logSetting: 'Nastavenie ', settingOn: 'nastavené', settingOff: 'zmazané',
+      saveFailed: 'Nastavenie sa nepodarilo uložiť: ',
+      logVersion: 'Verzia ', logMobile: ' (mobilná verzia)', logCountry: ', krajina ', logSettings: 'Nastavenia',
+      cancelled: 'Načítanie zrušené.',
+      requestError: 'Rozšírenie nedokázalo načítať API. Skontroluj prístup k webapi.alza.cz.',
+      timeout: 'Alza neodpovedala do 20 sekúnd.',
+      noRequest: 'Rozšírenie neposkytuje načítanie API. Skontroluj oprávnenia skriptu.',
+      noClipboard: 'Clipboard API nie je dostupné.',
+      pricesWith: 'Ceny s ', priceWith: 'Cena s ', prices: 'Ceny ', price: 'Cena ',
+      withCode: 'S kódom ', promoDefault: 'Akčná cena',
+      placed: 'Panel umiestnený ', placedGift: 'pod blokom s darčekom', placedPhoto: 'pod fotkou produktu',
+      placedTracker: 'pred Hlídačom shopů', placedModule: 'pred modulom alternatívnych cien', placedPrice: 'pod hlavnou cenou',
+      tableLabel: 'Ceny cenníkov: ', thTier: 'Cenník', thPrice: 'Cena', thDiscount: 'Zľava',
+      originalPrice: 'Pôvodná cena',
+      settingsTitle: 'Nastavenie cenníkov', copyOffer: 'Kopírovať ponuku',
+      equalNotice: 'Všetky cenníky majú rovnakú cenu',
+      loadError: 'Ceny sa nepodarilo načítať. Skús obnoviť stránku.',
+      createdBy: 'Vytvoril ',
+      pageChanged: 'Stránka sa medzitým zmenila.', nothingToCopy: 'Žiadna cena na kopírovanie.', productFallback: 'Produkt Alza',
+      originalColon: 'Pôvodná cena: ', link: 'Odkaz ➤ ',
+      copied: 'Skopírované', copiedLog: 'Ponuka skopírovaná do schránky:',
+      copyFailedTitle: 'Kopírovanie zlyhalo — skús to znova', copyFailedLog: 'Kopírovanie zlyhalo: ',
+      groupTiers: 'Cenníky', groupPromos: 'Akcie', tradeIn: 'Výkup', groupView: 'Zobrazenie',
+      helpAbout: 'Čo robí voľba: ',
+      optAlways: 'Vždy zobraziť cenníky',
+      optAlwaysHint: 'Zobrazí Vaše zapnuté cenníky vždy, aj keď pri cenníku nie je zľava alebo majú všetky cenníky rovnakú cenu.',
+      optLeft: 'Presunúť cenník doľava',
+      optLeftHint: 'Presunie cenník z pravého stĺpca pod miniatúry fotiek vľavo.',
+      clear: 'Zmazať', clearAffiliate: 'Zmazať affiliate', whatIsAffiliate: 'Čo je affiliate',
+      affiliateHint: 'Číslo partnera, ktoré sa pridá do kopírovaného odkazu ako ?idp=číslo.',
+      version: 'Verzia ', sourceCode: 'Zdrojový kód',
+      staleCache: ': použitá staršia cache (', tooLarge: 'Odpoveď API je príliš veľká.', blocked: 'HTTP 403: prístup zablokovaný.',
+      apiHttp: 'API vrátilo HTTP ', redirect: 'API presmerovalo na inú doménu.', noPrice: 'Cena v odpovedi sa nenašla.',
+      loading: 'Načítavam…',
+      noOwnPrice: ': bez vlastnej ceny', standard: ' (štandardná ',
+      product: 'Produkt ', logNoTier: ': žiadny cenník sa nenačítal, API je blokované alebo nedostupné.',
+      logEqual: ': všetky cenníky majú rovnakú cenu', logNothing: 'žiadny cenník na zobrazenie',
+      colTier: 'cenník', colPrice: 'cena', colDiscount: 'zľava', colPromo: 'akcia',
+      logOriginal: 'Pôvodná cena: ', logAlways: ' | režim: vždy zobraziť cenníky',
+      pricesLoaded: 'Ceny načítané: ', logLoading: ': načítavam cenníky.',
+    },
+  };
+  const T = TEXTS[country === 'SK' ? 'sk' : 'cs'];
   const CACHE_TTL = 5 * 60 * 1000;
   const CACHE_LIMIT = 60;
   // Shared by all panels, so returning to a product reuses its prices.
   const cache = new Map();
 
+  // Console output in the style of Hlídač shopů: a coloured prefix, then a short sentence.
+  // "log" is the overview, "debug" (Verbose level) the per-request detail, "warn" a problem.
+  const LOG_STYLE = 'background:#545fef;color:#fff;border-radius:3px;padding:1px 6px;font-weight:600';
+  // The message is a separate argument, not part of the format string, so a "%" in it is harmless.
+  const logHead = ['%cAlza Benefit Prices%c', LOG_STYLE, ''];
+  const log = (message, ...details) => console.info(...logHead, message, ...details);
+  const debug = (message, ...details) => console.debug(...logHead, message, ...details);
+  const warn = (message, ...details) => console.warn(...logHead, message, ...details);
+
+  function scriptVersion() {
+    return (typeof GM_info !== 'undefined' && GM_info?.script?.version)
+      || (typeof GM !== 'undefined' && GM.info?.script?.version) || '';
+  }
+
   // Safari Userscripts exposes asynchronous GM.* storage APIs.
   async function getSetting(key, fallback) {
     if (typeof GM !== 'undefined' && typeof GM.getValue === 'function') return await GM.getValue(key, fallback);
     if (typeof GM_getValue === 'function') return await GM_getValue(key, fallback);
-    throw new Error('Rozšíření neposkytuje ukládání nastavení. Zkontroluj oprávnění skriptu.');
+    throw new Error(T.noStorage);
   }
 
   async function setSetting(key, value) {
     if (typeof GM !== 'undefined' && typeof GM.setValue === 'function') return await GM.setValue(key, value);
     if (typeof GM_setValue === 'function') return await GM_setValue(key, value);
-    throw new Error('Rozšíření neposkytuje ukládání nastavení.');
+    throw new Error(T.noStorageWrite);
   }
 
   let settingWrites = Promise.resolve();
   function saveSetting(key, value) {
+    log(T.logSetting + key + ' = ' + (key === 'affiliate-idp' ? (value ? T.settingOn : T.settingOff) : JSON.stringify(value)));
     settingWrites = settingWrites.then(() => setSetting(key, value))
-      .catch(error => console.warn('[Alza Benefit Prices] Nastavení: ' + error.message));
+      .catch(error => warn(T.saveFailed + error.message));
   }
 
   const TIERS = [
@@ -97,6 +209,12 @@
   let belowPhotoOption = null;
   // Affiliate ID added to the copied link as ?idp=<number>; digits only.
   let affiliateId = String(savedIdp ?? '').replace(/\D/g, '').slice(0, 12);
+  log(T.logVersion + (scriptVersion() || '?') + ' — ' + location.hostname + (mobile ? T.logMobile : '') + T.logCountry + country);
+  // Keys are the storage keys of the settings, so the overview is the same on alza.cz and alza.sk.
+  debug(T.logSettings, {
+    'enabled-price-tiers': { ...enabled }, 'alza-plus-promos': alzaPlusPromos, 'cashback-price-promos': cashbackPromos,
+    'trade-in-promos': tradeInPromos, 'always-show-tiers': alwaysShow, 'panel-below-photo': belowPhoto, 'affiliate-idp': Boolean(affiliateId),
+  });
   let activeId = null;
   let generation = 0;
   let panel = null;
@@ -193,7 +311,7 @@
       };
       const fail = finish(reject);
       const tracked = { abort() {
-        fail(new Error('Načítání zrušeno.'));
+        fail(new Error(T.cancelled));
         try { handle?.abort?.(); } catch { /* The request may already be finished. */ }
       } };
       if (track) pending.push(tracked);
@@ -206,9 +324,9 @@
         method: 'GET', url, timeout: 20000, responseType: 'text',
         headers: { Accept: 'application/json, text/html;q=0.9' },
         onload: succeed,
-        onerror: () => fail(new Error('Rozšíření nedokázalo načíst API. Zkontroluj přístup k webapi.alza.cz.')),
-        ontimeout: () => fail(new Error('Alza neodpověděla do 20 sekund.')),
-        onabort: () => fail(new Error('Načítání zrušeno.')),
+        onerror: () => fail(new Error(T.requestError)),
+        ontimeout: () => fail(new Error(T.timeout)),
+        onabort: () => fail(new Error(T.cancelled)),
       };
       try {
         if (typeof GM !== 'undefined' && typeof GM.xmlHttpRequest === 'function') {
@@ -216,7 +334,7 @@
         } else if (typeof GM_xmlhttpRequest === 'function') {
           handle = GM_xmlhttpRequest(details);
         } else {
-          throw new Error('Rozšíření neposkytuje načítání API. Zkontroluj oprávnění skriptu.');
+          throw new Error(T.noRequest);
         }
         // Userscripts returns an abortable Promise; other managers can use callbacks.
         if (typeof handle?.then === 'function') handle.then(succeed, fail);
@@ -239,7 +357,8 @@
   }
 
   function formatPrice(amount) {
-    return priceFormat.format(amount) + (country === 'SK' ? ' €' : ' Kč');
+    if (country === 'SK') return (Number.isInteger(amount) ? priceFormat : centsFormat).format(amount) + ' €';
+    return priceFormat.format(amount) + ' Kč';
   }
 
   // Panel style of Alza's own prices, e.g. "549,-"; Slovak prices keep the euro sign.
@@ -279,26 +398,26 @@
   // ClipboardItem takes the text as a promise, so the write starts at once and gets the text later.
   async function writeClipboard(textPromise) {
     const clipboard = navigator.clipboard;
-    if (!clipboard) throw new Error('Clipboard API není dostupné.');
+    if (!clipboard) throw new Error(T.noClipboard);
     if (typeof ClipboardItem === 'function' && typeof clipboard.write === 'function') {
       try {
         await clipboard.write([new ClipboardItem({ 'text/plain': textPromise.then(text => new Blob([text], { type: 'text/plain' })) })]);
         return;
       } catch { /* Older ClipboardItem without promises: fall back to writeText below. */ }
     }
-    if (typeof clipboard.writeText !== 'function') throw new Error('Clipboard API není dostupné.');
+    if (typeof clipboard.writeText !== 'function') throw new Error(T.noClipboard);
     await clipboard.writeText(await textPromise);
   }
 
   // "S kódem X" -> "Ceny s kódem X" (or "Cena s kódem X" for a single price), "Cena s Cashback" -> "Ceny s Cashback".
   function pricesLabel(label, single = false) {
-    return label.replace(/^S /, single ? 'Cena s ' : 'Ceny s ').replace(/^Cena /, single ? 'Cena ' : 'Ceny ');
+    return label.replace(/^S /, single ? T.priceWith : T.pricesWith).replace(/^Cena /, single ? T.price : T.prices);
   }
 
   function promoLabel(result) {
     if (!result.promo) return '';
     return result.priceType === 4 ? 'S AlzaPlus+' : result.coupon
-      ? 'S kódem ' + result.coupon : result.name || 'Akční cena';
+      ? T.withCode + result.coupon : result.name || T.promoDefault;
   }
 
   function svgIcon(path, withCenter = false) {
@@ -354,6 +473,14 @@
     return document.querySelector('#detailPicture');
   }
 
+  // Remembered so that the console says where the panel went only when that changes.
+  let lastPlacement = '';
+  function placed(where) {
+    if (where === lastPlacement) return;
+    lastPlacement = where;
+    log(T.placed + where + '.');
+  }
+
   function place(host) {
     // Hlídačshopů's content lives in a closed shadow root; use its outer host.
     const tracker = document.querySelector('[data-hs], #hlidacShopu');
@@ -368,6 +495,7 @@
       const anchor = gift && gift.parentNode.contains(strip) && !gift.contains(strip)
         && strip.compareDocumentPosition(gift) & Node.DOCUMENT_POSITION_FOLLOWING ? gift : strip;
       if (anchor.nextElementSibling !== host) anchor.after(host);
+      placed(anchor === gift ? T.placedGift : T.placedPhoto);
       return;
     }
     host.style.margin = mobile ? '0' : '0 0 12px';
@@ -375,11 +503,13 @@
     if (before) {
       host.style.order = before.style.order || '';
       if (before.previousElementSibling !== host) before.before(host);
+      placed(tracker ? T.placedTracker : T.placedModule);
       return;
     }
     const price = document.querySelector('.js-price-detail__main-price-box-wrapper, [data-testid="price-primary"]');
     const after = price?.closest('.price-detail__row') || price;
     if (after && after.nextElementSibling !== host) after.after(host);
+    if (after) placed(T.placedPrice);
   }
 
   // Styles of the panel (it lives in a shadow root, so the page's CSS cannot touch it).
@@ -482,21 +612,21 @@
     node('style', PANEL_CSS, shadow);
     const section = node('section', null, shadow);
     section.id = 'price-table';
-    section.setAttribute('aria-label', 'Ceny ceníků: ' + TIERS.map(tier => tier.name).join(', '));
+    section.setAttribute('aria-label', T.tableLabel + TIERS.map(tier => tier.name).join(', '));
     // One shared live region announces the result instead of every price cell.
     const status = node('div', null, section);
     status.className = 'sr-only';
     status.setAttribute('role', 'status');
     const table = node('table', null, section);
     const heading = node('tr', null, node('thead', null, table));
-    node('th', 'Ceník', heading).scope = 'col';
-    const priceHeader = node('th', 'Cena', heading);
+    node('th', T.thTier, heading).scope = 'col';
+    const priceHeader = node('th', T.thPrice, heading);
     priceHeader.scope = 'col';
     // Shown instead of the per-row labels when every visible row has the same promo.
     const priceNote = node('span', null, priceHeader);
     priceNote.className = 'th-note';
     priceNote.hidden = true;
-    node('th', 'Sleva', heading).scope = 'col';
+    node('th', T.thDiscount, heading).scope = 'col';
     const tbody = node('tbody', null, table);
     const rows = TIERS.map(tier => {
       const tr = node('tr', null, tbody);
@@ -512,7 +642,7 @@
     });
     const originalRow = node('tr', null, node('tfoot', null, table));
     originalRow.hidden = true;
-    node('td', 'Původní cena', originalRow);
+    node('td', T.originalPrice, originalRow);
     const originalPrice = node('s', null, node('td', null, originalRow));
     node('td', '', originalRow);
     const footer = node('footer', null, section);
@@ -523,24 +653,24 @@
     gear.append(svgIcon('M19.42 9.59L21.85 10.26L21.85 13.74L19.42 14.41L18.95 15.54L20.19 17.74L17.74 20.19L15.54 18.95L14.41 19.42L13.74 21.85L10.26 21.85L9.59 19.42L8.46 18.95L6.26 20.19L3.81 17.74L5.05 15.54L4.58 14.41L2.15 13.74L2.15 10.26L4.58 9.59L5.05 8.46L3.81 6.26L6.26 3.81L8.46 5.05L9.59 4.58L10.26 2.15L13.74 2.15L14.41 4.58L15.54 5.05L17.74 3.81L20.19 6.26L18.95 8.46Z', true));
     gear.className = 'gear';
     gear.type = 'button';
-    gear.title = 'Nastavení ceníků';
-    gear.setAttribute('aria-label', 'Nastavení ceníků');
+    gear.title = T.settingsTitle;
+    gear.setAttribute('aria-label', T.settingsTitle);
     gear.setAttribute('aria-expanded', 'false');
     const copy = node('button', null, buttons);
     copy.className = 'gear';
     copy.type = 'button';
-    copy.title = 'Kopírovat nabídku';
-    copy.setAttribute('aria-label', 'Kopírovat nabídku');
+    copy.title = T.copyOffer;
+    copy.setAttribute('aria-label', T.copyOffer);
     copy.hidden = true;
     copy.append(svgIcon('M8 8H20V21H8Z M16 8V3H3V16H8'));
-    const notice = node('span', 'Všechny ceníky mají stejnou cenu', footer);
+    const notice = node('span', T.equalNotice, footer);
     notice.className = 'price-notice';
     notice.hidden = true;
     // Shown when no tier could be loaded at all (blocked API, network error).
-    const loadError = node('span', 'Ceny se nepodařilo načíst. Zkus obnovit stránku.', footer);
+    const loadError = node('span', T.loadError, footer);
     loadError.className = 'price-notice load-error';
     loadError.hidden = true;
-    const credit = node('span', 'Vytvořil ', footer);
+    const credit = node('span', T.createdBy, footer);
     const creditLink = node('a', 'Dexnis', credit);
     creditLink.href = 'https://github.com/dexnis-dev';
     creditLink.target = '_blank';
@@ -610,7 +740,7 @@
     }
     function resetCopy() {
       clearTimeout(copyReset);
-      setCopyState('Kopírovat nabídku');
+      setCopyState(T.copyOffer);
     }
     function showCopyState(label, className) {
       clearTimeout(copyReset);
@@ -622,11 +752,11 @@
     // prices already loaded for the panel (even if older than the cache time) so no network is awaited.
     async function offerText() {
       const offer = await buildOffer(id, true);
-      if (id !== activeId) throw new Error('Stránka se mezitím změnila.');
-      if (!offer) throw new Error('Žádná cena ke kopírování.');
-      const title = document.querySelector('h1')?.textContent.trim() || 'Produkt Alza';
+      if (id !== activeId) throw new Error(T.pageChanged);
+      if (!offer) throw new Error(T.nothingToCopy);
+      const title = document.querySelector('h1')?.textContent.trim() || T.productFallback;
       const lines = ['## ' + title, ''];
-      const original = offer.original !== null ? 'Původní cena: ~~' + formatPrice(offer.original) + '~~' : '';
+      const original = offer.original !== null ? T.originalColon + '~~' + formatPrice(offer.original) + '~~' : '';
       const priceText = entry => formatPrice(entry.amount)
         + (formatDiscount(entry.result.discountPercent) ? ' (' + formatDiscount(entry.result.discountPercent) + ')' : '');
       if (offer.single) {
@@ -655,7 +785,7 @@
           if (header) block.push(header);
           // A lone OSTATNÍ/BASIC under its own promo header is simply "the price of the others".
           const bare = Boolean(group.label) && group.entries.length === 1
-            && ['OSTATNÍ', 'BASIC'].includes(group.entries[0].names[0]);
+            && [T.others, 'BASIC'].includes(group.entries[0].names[0]);
           for (const entry of group.entries) {
             block.push('- ' + (entry.names.length && !bare ? '**' + entry.names.join('/') + '**: ' : '') + priceText(entry));
           }
@@ -669,16 +799,18 @@
       if (variant !== null) url.searchParams.set('dq', variant);
       if (affiliateId) url.searchParams.set('idp', affiliateId);
       url.hash = '';
-      lines.push('', 'Odkaz ➤ ' + url.href);
+      lines.push('', T.link + url.href);
       return lines.join('\n');
     }
     copy.onclick = async () => {
       try {
-        await writeClipboard(offerText());
-        showCopyState('Zkopírováno', 'done');
+        const text = offerText();
+        await writeClipboard(text);
+        showCopyState(T.copied, 'done');
+        log(T.copiedLog, '\n' + await text);
       } catch (error) {
-        showCopyState('Kopírování selhalo — zkus to znovu', 'failed');
-        console.warn('[Alza Benefit Prices] Kopírování: ' + error.message);
+        showCopyState(T.copyFailedTitle, 'failed');
+        warn(T.copyFailedLog + error.message);
       } finally { copy.focus({ preventScroll: true }); }
     };
     gear.onclick = () => {
@@ -708,18 +840,18 @@
       options.className = optionsClass;
       return options;
     }
-    const tierOptions = addGroup('Ceníky', 'settings-options');
+    const tierOptions = addGroup(T.groupTiers, 'settings-options');
     for (const tier of TIERS) {
       addCheckbox(tierOptions, tier.name, enabled[tier.name], value => {
         enabled[tier.name] = value;
         change('enabled-price-tiers', { ...enabled });
       });
     }
-    const actionOptions = addGroup('Akce', 'settings-options');
+    const actionOptions = addGroup(T.groupPromos, 'settings-options');
     addCheckbox(actionOptions, 'AlzaPlus+', alzaPlusPromos, value => { alzaPlusPromos = value; change('alza-plus-promos', value); });
     addCheckbox(actionOptions, 'Cashback', cashbackPromos, value => { cashbackPromos = value; change('cashback-price-promos', value); });
-    addCheckbox(actionOptions, 'Výkup', tradeInPromos, value => { tradeInPromos = value; change('trade-in-promos', value); });
-    const viewOptions = addGroup('Zobrazení', 'settings-options view-options');
+    addCheckbox(actionOptions, T.tradeIn, tradeInPromos, value => { tradeInPromos = value; change('trade-in-promos', value); });
+    const viewOptions = addGroup(T.groupView, 'settings-options view-options');
     // A checkbox with a "?" button that explains it.
     function viewOption(text, hint, checked, update) {
       const option = node('div', null, viewOptions);
@@ -730,15 +862,15 @@
       const help = node('button', '?', row);
       help.className = 'help';
       help.type = 'button';
-      help.setAttribute('aria-label', 'Co dělá volba: ' + text);
+      help.setAttribute('aria-label', T.helpAbout + text);
       attachHelp(help, hint);
       return option;
     }
-    viewOption('Vždy zobrazit ceníky',
-      'Zobrazí Vaše zapnuté ceníky vždycky, i když není u ceníku sleva nebo jsou všechny ceníky se stejnou cenou.',
+    viewOption(T.optAlways,
+      T.optAlwaysHint,
       alwaysShow, value => { alwaysShow = value; change('always-show-tiers', value); });
-    belowPhotoOption = viewOption('Přesunout ceník doleva',
-      'Přesune ceník z pravého sloupce pod miniatury fotek vlevo.',
+    belowPhotoOption = viewOption(T.optLeft,
+      T.optLeftHint,
       belowPhoto, value => {
         belowPhoto = value;
         saveSetting('panel-below-photo', value);
@@ -759,14 +891,14 @@
     const idpClear = node('button', '×', idpWrap);
     idpClear.className = 'idp-clear';
     idpClear.type = 'button';
-    idpClear.title = 'Smazat';
-    idpClear.setAttribute('aria-label', 'Smazat affiliate');
+    idpClear.title = T.clear;
+    idpClear.setAttribute('aria-label', T.clearAffiliate);
     idpClear.hidden = !affiliateId;
     const idpHelp = node('button', '?', idpRow);
     idpHelp.className = 'help';
     idpHelp.type = 'button';
-    idpHelp.setAttribute('aria-label', 'Co je affiliate');
-    attachHelp(idpHelp, 'Číslo partnera, které se přidá do kopírovaného odkazu jako ?idp=číslo.');
+    idpHelp.setAttribute('aria-label', T.whatIsAffiliate);
+    attachHelp(idpHelp, T.affiliateHint);
     function saveAffiliate() {
       affiliateId = idpInput.value;
       idpClear.hidden = !affiliateId;
@@ -785,10 +917,9 @@
     };
     const info = node('div', null, settings);
     info.className = 'settings-info';
-    const version = (typeof GM_info !== 'undefined' && GM_info?.script?.version)
-      || (typeof GM !== 'undefined' && GM.info?.script?.version) || '';
-    node('span', version ? 'Verze ' + version : 'Alza Benefit Prices', info);
-    const sourceLink = node('a', 'Zdrojový kód', info);
+    const version = scriptVersion();
+    node('span', version ? T.version + version : 'Alza Benefit Prices', info);
+    const sourceLink = node('a', T.sourceCode, info);
     sourceLink.href = 'https://github.com/dexnis-dev/Alza-Benefit-Prices/';
     sourceLink.target = '_blank';
     sourceLink.rel = 'noopener noreferrer';
@@ -801,16 +932,22 @@
   async function tierData(id, tier, run, allowStale = false) {
     const url = apiUrl(id, tier);
     const cached = cache.get(url);
-    if (cached && (allowStale || Date.now() - cached.time < CACHE_TTL)) return cached.data;
+    if (cached && (allowStale || Date.now() - cached.time < CACHE_TTL)) {
+      // Only the interesting case is logged: an expired entry that the copied offer still uses.
+      if (Date.now() - cached.time >= CACHE_TTL) debug(tier.name + T.staleCache + Math.round((Date.now() - cached.time) / 1000) + ' s)');
+      return cached.data;
+    }
+    debug(tier.name + ': GET ' + url);
     const response = await request(url, run !== null);
+    debug(tier.name + ': HTTP ' + response.status + ', ' + response.responseText.length + ' B');
     if (run !== null && run !== generation) return null;
-    if (response.responseText.length > 2 * 1024 * 1024) throw new Error('Odpověď API je příliš velká.');
-    if (response.status === 403) throw new Error('HTTP 403: přístup blokován.');
-    if (response.status < 200 || response.status >= 300) throw new Error('API vrátilo HTTP ' + response.status + '.');
-    if (response.finalUrl && new URL(response.finalUrl).hostname !== 'webapi.alza.cz') throw new Error('API přesměrovalo na jinou doménu.');
+    if (response.responseText.length > 2 * 1024 * 1024) throw new Error(T.tooLarge);
+    if (response.status === 403) throw new Error(T.blocked);
+    if (response.status < 200 || response.status >= 300) throw new Error(T.apiHttp + response.status + '.');
+    if (response.finalUrl && new URL(response.finalUrl).hostname !== 'webapi.alza.cz') throw new Error(T.redirect);
     let data;
     try { data = JSON.parse(response.responseText); }
-    catch { throw new Error('Cena v odpovědi nenalezena.'); }
+    catch { throw new Error(T.noPrice); }
     cache.set(url, { data, time: Date.now() });
     if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value);
     return data;
@@ -828,7 +965,7 @@
         if (result.hidden) return { tier, result: null, comparison: extractPrice(data, true, all) };
         return { tier, result, comparison: result };
       } catch (error) {
-        console.warn('[Alza Benefit Prices] ' + tier.name + ': ' + error.message);
+        debug(tier.name + ': ' + error.message);
         return null;
       }
     }));
@@ -852,7 +989,7 @@
     const stands = Boolean(lone) && tiers.includes(lone);
     // BASIC (or OSTATNÍ) is listed only with a discount of its own, as in the table.
     if (entries.length && discounted(basic)) {
-      entries.push({ tier: basic.tier, names: [stands ? 'OSTATNÍ' : 'BASIC'], amount: basic.result.amount, result: basic.result });
+      entries.push({ tier: basic.tier, names: [stands ? T.others : 'BASIC'], amount: basic.result.amount, result: basic.result });
     } else if (!entries.length && discounted(basic)) {
       entries = [{ names: [], amount: basic.result.amount, result: basic.result }];
     }
@@ -890,22 +1027,25 @@
     state.originalRow.hidden = true;
     state.loadError.hidden = true;
     let failed = 0;
-    state.rows.forEach(row => { row.tr.hidden = true; row.valid = false; row.result = null; row.amount = null; row.comparisonAmount = null; row.discount.textContent = '—'; row.price.textContent = 'Načítání…'; });
+    state.rows.forEach(row => { row.tr.hidden = true; row.valid = false; row.result = null; row.amount = null; row.comparisonAmount = null; row.discount.textContent = '—'; row.price.textContent = T.loading; });
     async function loadRow(row) {
       try {
         const data = await tierData(id, row.tier, run);
         if (run !== generation || data === null) return;
         let result = extractPrice(data, row.tier.reference);
-        if (!result) throw new Error('Cena v odpovědi nenalezena.');
+        if (!result) throw new Error(T.noPrice);
         // Check equality even when a standard priceGroupType hides the row.
         const comparison = result.hidden ? extractPrice(data, true) : result;
         row.comparisonAmount = comparison?.amount ?? null;
         // With "always show", a tier without its own price falls back to the standard one.
         if (result.hidden && alwaysShow && comparison) result = comparison;
         if (result.hidden) {
+          debug(row.tier.name + T.noOwnPrice + (comparison ? T.standard + comparison.price + ')' : ''));
           row.tr.hidden = true;
           return;
         }
+        debug(row.tier.name + ': ' + result.price + (result.promo ? ' ' + promoLabel(result) : '')
+          + (result.discountPercent ? ' (' + formatDiscount(result.discountPercent) + ')' : ''));
         row.price.textContent = result.price;
         row.discount.textContent = '—';
         if (result.discountPercent !== null) {
@@ -924,7 +1064,7 @@
         if (run !== generation) return;
         failed++;
         row.tr.hidden = true;
-        console.warn('[Alza Benefit Prices] ' + row.tier.name + ': ' + error.message);
+        warn(row.tier.name + ': ' + error.message);
       }
     }
     // Fetch independent tiers together, then BASIC only if a price was found.
@@ -964,13 +1104,31 @@
       state.loadError.hidden = !loadFailed;
       state.section.classList.toggle('footer-message', showNotice || loadFailed);
       state.section.classList.toggle('settings-only', !hasPrices && !showNotice && !loadFailed && state.settings.hidden);
+      if (loadFailed) {
+        warn(T.product + id + T.logNoTier);
+      } else if (showNotice) {
+        log(T.product + id + T.logEqual + (commonPrice ? ' ' + formatPrice(commonPrice.amount) : '') + '.');
+      } else {
+        console.groupCollapsed(...logHead, T.product + id + ': '
+          + (sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') || T.logNothing));
+        if (sorted.length) {
+          console.table(sorted.map(row => ({
+            [T.colTier]: row.displayName, [T.colPrice]: formatPrice(row.amount),
+            [T.colDiscount]: formatDiscount(row.result.discountPercent) || '—', [T.colPromo]: promoLabel(row.result) || '—',
+          })));
+        }
+        console.log(T.logOriginal + (shownOriginal === null ? '—' : formatPrice(shownOriginal)) + (alwaysShow ? T.logAlways : ''));
+        console.groupEnd();
+      }
       state.status.textContent = loadFailed ? state.loadError.textContent : showNotice ? state.notice.textContent
-        : hasPrices ? 'Ceny načteny: ' + sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') : '';
+        : hasPrices ? T.pricesLoaded + sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') : '';
       state.section.setAttribute('aria-busy', 'false');
       state.loaded = true;
       state.host.hidden = false;
-      // Show the copy button only when there is something with a discount to copy.
-      buildOffer(id).then(offer => { if (run === generation) state.copy.hidden = !offer; }, () => {});
+      // Show the copy button only when there is something to copy. Nothing loaded means nothing to copy,
+      // so the same blocked requests are not repeated.
+      if (loadFailed) state.copy.hidden = true;
+      else buildOffer(id).then(offer => { if (run === generation) state.copy.hidden = !offer; }, () => {});
     }
   }
 
@@ -1002,7 +1160,7 @@
     const compared = rows.filter(row => !row.tier.reference && enabled[row.tier.name]);
     const lone = basic?.valid ? onlyDifferent(basic.amount, compared, row => row.comparisonAmount) : null;
     if (lone && !lone.tr.hidden) {
-      basic.displayName = 'OSTATNÍ';
+      basic.displayName = T.others;
       if (basic.badge) basic.badge.textContent = basic.displayName;
       // Without a discount of its own OSTATNÍ would only repeat the original price shown below the table.
       basic.tr.hidden = !(basic.result?.discountPercent > 0);
@@ -1024,7 +1182,9 @@
       panel?.host.remove(); panel = null; activeId = id;
       stripRetries = 0;
       clearTimeout(stripTimer);
+      lastPlacement = '';
       if (id) {
+        log(T.product + id + T.logLoading);
         panel = createPanel(id);
         void load(id, panel);
       }
@@ -1044,4 +1204,4 @@
   window.addEventListener('pagehide', event => {
     if (!event.persisted) { clearInterval(timer); cancel(); }
   });
-})().catch(error => console.error('[Alza Benefit Prices] Spuštění: ' + error.message));
+})().catch(error => console.error('[Alza Benefit Prices] ' + (/alza\.sk$/i.test(location.hostname) ? 'Spustenie: ' : 'Spuštění: ') + error.message));
