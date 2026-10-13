@@ -3,7 +3,7 @@
 // @icon         https://www.alza.cz/favicon-alza.ico
 // @author       Dexnis
 // @namespace    alza-benefit-prices
-// @version      1.3.0
+// @version      1.3.1
 // @updateURL    https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @downloadURL  https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
 // @description  Userscript for Alza.cz, Alza.sk, Alza.hu, Alza.de and Alza.at that shows the prices of the Gold, Silver, ISIC, Bronze, B2B and Basic price lists
@@ -1030,6 +1030,10 @@
         lines.push(blocks.join('\n'));
       }
       const url = new URL(location.href);
+      // Always the desktop address (www.alza.cz), also when copied from m.alza.cz or the bare domain.
+      url.hostname = url.hostname.replace(/^(?:m\.|www\.)?(alza\.(?:cz|sk|hu|de|at))$/i, 'www.$1');
+      // The /EN/ language prefix is not part of the copied link.
+      url.pathname = url.pathname.replace(/^\/en(?=\/)/i, '');
       const variant = url.searchParams.get('dq');
       url.search = '';
       if (variant !== null) url.searchParams.set('dq', variant);
