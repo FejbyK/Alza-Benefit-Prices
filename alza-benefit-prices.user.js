@@ -3,7 +3,7 @@
 // @icon         https://www.alza.cz/favicon-alza.ico
 // @author       FejbyK
 // @namespace    alza-benefit-prices
-// @version      1.3.1
+// @version      1.3.2
 // @updateURL    https://github.com/FejbyK/Alza-Benefit-Prices/raw/refs/heads/main/alza-benefit-prices.user.js
 // @downloadURL  https://github.com/FejbyK/Alza-Benefit-Prices/raw/refs/heads/main/alza-benefit-prices.user.js
 // @description  Userscript pro Alza.cz, který zobrazuje ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic
