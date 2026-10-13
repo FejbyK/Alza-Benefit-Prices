@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Alza Benefit Prices
 // @icon         https://www.alza.cz/favicon-alza.ico
-// @author       Dexnis
+// @author       FejbyK
 // @namespace    alza-benefit-prices
 // @version      1.3.1
-// @updateURL    https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
-// @downloadURL  https://raw.githubusercontent.com/dexnis-dev/Alza-Benefit-Prices/main/alza-benefit-prices.user.js
+// @updateURL    https://github.com/FejbyK/Alza-Benefit-Prices/raw/refs/heads/main/alza-benefit-prices.user.js
+// @downloadURL  https://github.com/FejbyK/Alza-Benefit-Prices/raw/refs/heads/main/alza-benefit-prices.user.js
 // @description  Userscript for Alza.cz, Alza.sk, Alza.hu, Alza.de and Alza.at that shows the prices of the Gold, Silver, ISIC, Bronze, B2B and Basic price lists
 // @description:cs  Userscript pro Alza.cz, Alza.sk, Alza.hu, Alza.de a Alza.at, který zobrazuje ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic
 // @description:sk  Userscript pre Alza.cz, Alza.sk, Alza.hu, Alza.de a Alza.at, ktorý zobrazuje ceny cenníkov Gold, Silver, ISIC, Bronze, B2B a Basic
