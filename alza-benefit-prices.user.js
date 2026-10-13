@@ -134,7 +134,7 @@
 
   function scriptVersion() {
     return (typeof GM_info !== 'undefined' && GM_info?.script?.version)
-      || (typeof GM !== 'undefined' && GM.info?.script?.version) || '';
+        || (typeof GM !== 'undefined' && GM.info?.script?.version) || '';
   }
 
   async function getSetting(key, fallback) {
@@ -197,7 +197,7 @@
     log(LOG.logSetting + key + ' = ' + JSON.stringify(value));
     const snapshot = { ...storedSettings, 'enabled-price-tiers': { ...storedSettings['enabled-price-tiers'] } };
     settingWrites = settingWrites.then(() => setSetting('settings', snapshot))
-      .catch(error => warn(LOG.saveFailed + error.message));
+        .catch(error => warn(LOG.saveFailed + error.message));
   }
 
   log(LOG.logVersion + (scriptVersion() || '?') + ' — ' + location.hostname + (mobile ? LOG.logMobile : '') + LOG.logCountry + country);
@@ -245,7 +245,7 @@
       return null;
     }
     const pricing = (data?.data && (data.data.mainPriceTag || Array.isArray(data.data.promoPrices)))
-      ? data.data : findPricing(data);
+        ? data.data : findPricing(data);
     if (!pricing) return null;
     const main = pricing.mainPriceTag;
     if (!reference && main?.priceGroupType === 0 && main.priceType !== 7) return { hidden: true };
@@ -281,7 +281,7 @@
     }
     if (selected) {
       selected.discountPercent = discountBase && discountBase.amount > 0 && discountBase.amount > selected.amount
-        ? (discountBase.amount - selected.amount) / discountBase.amount * 100 : null;
+          ? (discountBase.amount - selected.amount) / discountBase.amount * 100 : null;
       selected.discountBaseAmount = discountBase?.amount ?? null;
       selected.mainAmount = mainCandidate?.amount ?? null;
     }
@@ -300,9 +300,9 @@
       };
       const fail = finish(reject);
       const tracked = { abort() {
-        fail(new Error(LOG.cancelled));
-        try { handle?.abort?.(); } catch { /* The request may already be finished. */ }
-      } };
+          fail(new Error(LOG.cancelled));
+          try { handle?.abort?.(); } catch { /* The request may already be finished. */ }
+        } };
       if (track) pending.push(tracked);
       const succeed = finish(response => resolve({
         status: response.status,
@@ -417,7 +417,7 @@
   function promoLabel(result) {
     if (!result.promo) return '';
     return result.priceType === 4 ? T.withWord + 'AlzaPlus+' : result.coupon
-      ? T.withCode + result.coupon : result.name || T.promoDefault;
+        ? T.withCode + result.coupon : result.name || T.promoDefault;
   }
 
   function svgIcon(path, withCenter = false) {
@@ -485,7 +485,7 @@
       host.style.order = '';
       const gift = document.querySelector('[data-react-client-component="promoListModule"]');
       const anchor = gift && gift.parentNode.contains(strip) && !gift.contains(strip)
-        && strip.compareDocumentPosition(gift) & Node.DOCUMENT_POSITION_FOLLOWING ? gift : strip;
+      && strip.compareDocumentPosition(gift) & Node.DOCUMENT_POSITION_FOLLOWING ? gift : strip;
       if (anchor.nextElementSibling !== host) anchor.after(host);
       placed(anchor === gift ? LOG.placedGift : LOG.placedPhoto);
       return;
@@ -729,7 +729,7 @@
       const lines = ['## ' + title, ''];
       const original = offer.original !== null ? T.originalColon + '~~' + formatPrice(offer.original) + '~~' : '';
       const priceText = entry => formatPrice(entry.amount)
-        + (formatDiscount(entry.result.discountPercent) ? ' (' + formatDiscount(entry.result.discountPercent) + ')' : '');
+          + (formatDiscount(entry.result.discountPercent) ? ' (' + formatDiscount(entry.result.discountPercent) + ')' : '');
       if (offer.single) {
         lines.push('- ' + formatPrice(offer.entries[0].amount));
       } else {
@@ -751,7 +751,7 @@
           }
           if (header) block.push(header);
           const bare = Boolean(group.label) && group.entries.length === 1
-            && [T.others, 'BASIC'].includes(group.entries[0].names[0]);
+              && [T.others, 'BASIC'].includes(group.entries[0].names[0]);
           for (const entry of group.entries) {
             block.push('- ' + (entry.names.length && !bare ? '**' + entry.names.join('/') + '**: ' : '') + priceText(entry));
           }
@@ -832,15 +832,15 @@
       return option;
     }
     viewOption(T.optAlways,
-      T.optAlwaysHint,
-      alwaysShow, value => { alwaysShow = value; change('always-show-tiers', value); });
+        T.optAlwaysHint,
+        alwaysShow, value => { alwaysShow = value; change('always-show-tiers', value); });
     belowPhotoOption = viewOption(T.optLeft,
-      T.optLeftHint,
-      belowPhoto, value => {
-        belowPhoto = value;
-        saveSetting('panel-below-photo', value);
-        mount(host);
-      });
+        T.optLeftHint,
+        belowPhoto, value => {
+          belowPhoto = value;
+          saveSetting('panel-below-photo', value);
+          mount(host);
+        });
     belowPhotoOption.hidden = true;
     mount(host);
     return state;
@@ -903,16 +903,16 @@
     }
     const discounted = item => item?.result?.discountPercent > 0;
     const tiers = found.filter(item => item && !item.tier.reference && discounted(item)
-      && (!basic || item.result.amount < basic.result.amount));
+        && (!basic || item.result.amount < basic.result.amount));
     const toEntry = (item, result = item.result) => (
-      { tier: item.tier, names: [item.tier.name.toUpperCase()], amount: result.amount, result });
+        { tier: item.tier, names: [item.tier.name.toUpperCase()], amount: result.amount, result });
     const fold = list => {
       foldPairs(list, (target, source) => { target.names.push(...source.names); source.folded = true; });
       return list.filter(entry => !entry.folded);
     };
     let entries = fold(tiers.sort((a, b) => a.result.amount - b.result.amount).map(item => toEntry(item)));
     const others = TIERS.filter(tier => !tier.reference)
-      .map(tier => found.find(item => item?.tier === tier) || { tier, comparison: null });
+        .map(tier => found.find(item => item?.tier === tier) || { tier, comparison: null });
     const lone = basic ? onlyDifferent(basic.result.amount, others, item => item.comparison?.amount ?? null) : null;
     const stands = Boolean(lone) && tiers.includes(lone);
     if (entries.length && discounted(basic)) {
@@ -984,7 +984,7 @@
           return;
         }
         debug(row.tier.name + ': ' + result.price + (result.promo ? ' ' + promoLogLabel(result) : '')
-          + (result.discountPercent ? ' (' + formatDiscount(result.discountPercent) + ')' : ''));
+            + (result.discountPercent ? ' (' + formatDiscount(result.discountPercent) + ')' : ''));
         renderResult(row, result);
       } catch (error) {
         if (run !== generation) return;
@@ -1014,16 +1014,16 @@
       for (const row of sorted) row.tr.parentNode.append(row.tr);
       const compared = state.rows.filter(row => row.tier.reference || enabled[row.tier.name]);
       const equalPrices = compared.length > 1 && compared.every(row =>
-        row.comparisonAmount !== null && row.comparisonAmount === compared[0].comparisonAmount);
+          row.comparisonAmount !== null && row.comparisonAmount === compared[0].comparisonAmount);
       const showNotice = equalPrices && !alwaysShow;
       const hasPrices = !showNotice && sorted.length > 0;
       const commonPrice = showNotice && basic?.valid ? basic.result : null;
       const bases = sorted.map(row => row.result.discountBaseAmount).filter(amount => amount !== null);
       const originalAmount = basic?.valid ? basic.result.discountBaseAmount ?? basic.amount
-        : bases.length && bases.every(amount => amount === bases[0]) ? bases[0] : null;
+          : bases.length && bases.every(amount => amount === bases[0]) ? bases[0] : null;
       const shownOriginal = (hasPrices || commonPrice) && originalAmount !== null
-        && (commonPrice ? commonPrice.amount < originalAmount : sorted.some(row => row.amount < originalAmount))
-        ? originalAmount : null;
+      && (commonPrice ? commonPrice.amount < originalAmount : sorted.some(row => row.amount < originalAmount))
+          ? originalAmount : null;
       state.originalRow.hidden = shownOriginal === null;
       state.originalPrice.textContent = shownOriginal === null ? '' : formatPanelPrice(shownOriginal);
       const labels = sorted.map(row => promoLabel(row.result));
@@ -1044,7 +1044,7 @@
         log(LOG.product + id + LOG.logEqual + (commonPrice ? ' ' + formatPrice(commonPrice.amount) : '') + '.');
       } else {
         console.groupCollapsed(...logHead, LOG.product + id + ': '
-          + (sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') || LOG.logNothing));
+            + (sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') || LOG.logNothing));
         if (sorted.length) {
           console.table(sorted.map(row => ({
             [LOG.colTier]: row.displayName, [LOG.colPrice]: formatPrice(row.amount),
@@ -1055,7 +1055,7 @@
         console.groupEnd();
       }
       state.status.textContent = loadFailed ? state.loadError.textContent : showNotice ? state.notice.textContent
-        : hasPrices ? T.pricesLoaded + sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') : '';
+          : hasPrices ? T.pricesLoaded + sorted.map(row => row.displayName + ' ' + formatPrice(row.amount)).join(', ') : '';
       state.section.setAttribute('aria-busy', 'false');
       state.loaded = true;
       state.host.hidden = false;
