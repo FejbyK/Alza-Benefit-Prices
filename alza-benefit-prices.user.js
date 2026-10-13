@@ -56,7 +56,6 @@
     copyOffer: 'Kopírovat nabídku',
     equalNotice: 'Všechny ceníky mají stejnou cenu',
     loadError: 'Ceny se nepodařilo načíst. Zkus obnovit stránku.',
-    createdBy: 'Vytvořil ',
     productFallback: 'Produkt Alza',
     originalColon: 'Původní cena: ',
     link: 'Odkaz ➤ ',
@@ -546,12 +545,11 @@
   .gear:hover,.gear[aria-expanded="true"]{background:#f5f5f5;color:#000}
   .gear.done{background:#e9f7e1;border-color:#5dbd2f;color:#2f7a12}
   .gear.failed{border-color:#ca0505;color:#ca0505}
-  .gear:focus-visible,input:focus-visible,.credit a:focus-visible{outline:2px solid #545fef;outline-offset:2px}
+  .gear:focus-visible,input:focus-visible{outline:2px solid #545fef;outline-offset:2px}
   .price-notice{flex:1;color:#606060;font-size:13px}
   .footer-message .credit{margin-top:0;padding:0 4px;justify-content:flex-start}
   .footer-message .gear{flex-shrink:0}
   .load-error{color:#ca0505}
-  .credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 
   /* Settings */
   .settings{display:grid;gap:16px;padding:0 8px 12px;margin-top:8px}
@@ -653,11 +651,6 @@
     const loadError = node('span', T.loadError, footer);
     loadError.className = 'price-notice load-error';
     loadError.hidden = true;
-    const credit = node('span', T.createdBy, footer);
-    const creditLink = node('a', 'FejbyK', credit);
-    creditLink.href = 'https://github.com/FejbyK';
-    creditLink.target = '_blank';
-    creditLink.rel = 'noopener noreferrer';
     const settings = node('div', null, section);
     const tip = node('div', null, section);
     tip.className = 'tip';
@@ -710,7 +703,7 @@
     settings.id = 'price-tier-settings';
     settings.hidden = true;
     gear.setAttribute('aria-controls', settings.id);
-    const state = { dispose: () => outside.abort(), host, rows, table, section, status, priceNote, credit, notice, loadError, settings, copy, originalRow, originalPrice, loaded: false };
+    const state = { dispose: () => outside.abort(), host, rows, table, section, status, priceNote, notice, loadError, settings, copy, originalRow, originalPrice, loaded: false };
     let copyReset = 0;
     function setCopyState(label, className) {
       copy.className = className ? 'gear ' + className : 'gear';
@@ -1039,7 +1032,6 @@
       state.priceNote.hidden = !sharedPromo;
       state.section.classList.toggle('shared-promo', Boolean(sharedPromo));
       state.table.hidden = !hasPrices;
-      state.credit.hidden = !hasPrices;
       const anyValidOrCompared = state.rows.some(row => row.valid || row.comparisonAmount !== null);
       const loadFailed = failed > 0 && !anyValidOrCompared;
       state.notice.hidden = !showNotice;
