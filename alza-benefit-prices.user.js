@@ -6,11 +6,7 @@
 // @version      1.3.1
 // @updateURL    https://github.com/FejbyK/Alza-Benefit-Prices/raw/refs/heads/main/alza-benefit-prices.user.js
 // @downloadURL  https://github.com/FejbyK/Alza-Benefit-Prices/raw/refs/heads/main/alza-benefit-prices.user.js
-// @description  Userscript for Alza.cz, Alza.sk, Alza.hu, Alza.de and Alza.at that shows the prices of the Gold, Silver, ISIC, Bronze, B2B and Basic price lists
-// @description:cs  Userscript pro Alza.cz, Alza.sk, Alza.hu, Alza.de a Alza.at, který zobrazuje ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic
-// @description:sk  Userscript pre Alza.cz, Alza.sk, Alza.hu, Alza.de a Alza.at, ktorý zobrazuje ceny cenníkov Gold, Silver, ISIC, Bronze, B2B a Basic
-// @description:hu  Userscript az Alza.cz, Alza.sk, Alza.hu, Alza.de és Alza.at oldalakhoz, amely megjeleníti a Gold, Silver, ISIC, Bronze, B2B és Basic árlisták árait
-// @description:de  Userscript für Alza.cz, Alza.sk, Alza.hu, Alza.de und Alza.at, das die Preise der Preislisten Gold, Silver, ISIC, Bronze, B2B und Basic anzeigt
+// @description  Userscript pro Alza.cz, který zobrazuje ceny ceníků Gold, Silver, ISIC, Bronze, B2B a Basic
 // @compatible   chrome
 // @compatible   edge
 // @compatible   firefox
@@ -18,14 +14,6 @@
 // @compatible   safari
 // @match        https://*.alza.cz/*-d*.htm*
 // @match        https://*.alza.cz/*?*dq=*
-// @match        https://*.alza.sk/*-d*.htm*
-// @match        https://*.alza.sk/*?*dq=*
-// @match        https://*.alza.hu/*-d*.htm*
-// @match        https://*.alza.hu/*?*dq=*
-// @match        https://*.alza.de/*-d*.htm*
-// @match        https://*.alza.de/*?*dq=*
-// @match        https://*.alza.at/*-d*.htm*
-// @match        https://*.alza.at/*?*dq=*
 // @connect      webapi.alza.cz
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -44,242 +32,54 @@
   // Do not initialize settings, requests or observers outside product pages.
   if (!productId(location.pathname, location.search)) return;
 
-  // The shop by its domain; the price API is always webapi.alza.cz and takes the country as a parameter.
-  const country = /(?:^|\.)alza\.sk$/i.test(location.hostname) ? 'SK'
-    : /(?:^|\.)alza\.hu$/i.test(location.hostname) ? 'HU'
-    : /(?:^|\.)alza\.de$/i.test(location.hostname) ? 'DE'
-    : /(?:^|\.)alza\.at$/i.test(location.hostname) ? 'AT' : 'CZ';
-  const locale = { SK: 'sk-SK', HU: 'hu-HU', DE: 'de-DE', AT: 'de-AT', CZ: 'cs-CZ' }[country];
-  const euro = ['SK', 'DE', 'AT'].includes(country); // prices in euro, with cents
-  const hasIsic = !['HU', 'AT'].includes(country); // these shops have no ISIC price list
+  const country = 'CZ';
+  const locale = 'cs-CZ';
   const discountFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const priceFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
-  // Euro cents always have two digits, as on Alza.sk: "54,90 €", not "54,9 €".
-  const centsFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const mobile = /^m\.alza\.(?:cz|sk|hu|de|at)$/i.test(location.hostname);
+  const mobile = /^m\.alza\.cz$/i.test(location.hostname);
 
-  // Texts shown to the user (panel, copied offer), one dictionary per language. Console messages are in
-  // English only and live in LOG.
-  const TEXTS = {
-    cs: {
-      others: 'OSTATNÍ',
-      pricesWith: 'Ceny s ',
-      priceWith: 'Cena s ',
-      prices: 'Ceny ',
-      price: 'Cena ',
-      withWord: 'S ',
-      withCode: 'S kódem ',
-      promoDefault: 'Akční cena',
-      tableLabel: 'Ceny ceníků: ',
-      thTier: 'Ceník',
-      thPrice: 'Cena',
-      thDiscount: 'Sleva',
-      originalPrice: 'Původní cena',
-      settingsTitle: 'Nastavení ceníků',
-      copyOffer: 'Kopírovat nabídku',
-      equalNotice: 'Všechny ceníky mají stejnou cenu',
-      loadError: 'Ceny se nepodařilo načíst. Zkus obnovit stránku.',
-      createdBy: 'Vytvořil ',
-      productFallback: 'Produkt Alza',
-      originalColon: 'Původní cena: ',
-      link: 'Odkaz ➤ ',
-      copied: 'Zkopírováno',
-      copyFailedTitle: 'Kopírování selhalo — zkus to znovu',
-      groupTiers: 'Ceníky',
-      groupPromos: 'Akce',
-      tradeIn: 'Výkup',
-      groupView: 'Zobrazení',
-      helpAbout: 'Co dělá volba: ',
-      optAlways: 'Vždy zobrazit ceníky',
-      optAlwaysHint: 'Zobrazí Vaše zapnuté ceníky vždycky, i když není u ceníku sleva nebo jsou všechny ceníky se stejnou cenou.',
-      optLeft: 'Přesunout ceník doleva',
-      optLeftHint: 'Přesune ceník z pravého sloupce pod miniatury fotek vlevo.',
-      clear: 'Smazat',
-      clearAffiliate: 'Smazat affiliate',
-      whatIsAffiliate: 'Co je affiliate',
-      affiliateHint: 'Číslo partnera, které se přidá do kopírovaného odkazu jako ?idp=číslo.',
-      version: 'Verze ',
-      sourceCode: 'Zdrojový kód',
-      loading: 'Načítání…',
-      pricesLoaded: 'Ceny načteny: ',
-    },
-    sk: {
-      others: 'OSTATNÉ',
-      pricesWith: 'Ceny s ',
-      priceWith: 'Cena s ',
-      prices: 'Ceny ',
-      price: 'Cena ',
-      withWord: 'S ',
-      withCode: 'S kódom ',
-      promoDefault: 'Akčná cena',
-      tableLabel: 'Ceny cenníkov: ',
-      thTier: 'Cenník',
-      thPrice: 'Cena',
-      thDiscount: 'Zľava',
-      originalPrice: 'Pôvodná cena',
-      settingsTitle: 'Nastavenie cenníkov',
-      copyOffer: 'Kopírovať ponuku',
-      equalNotice: 'Všetky cenníky majú rovnakú cenu',
-      loadError: 'Ceny sa nepodarilo načítať. Skús obnoviť stránku.',
-      createdBy: 'Vytvoril ',
-      productFallback: 'Produkt Alza',
-      originalColon: 'Pôvodná cena: ',
-      link: 'Odkaz ➤ ',
-      copied: 'Skopírované',
-      copyFailedTitle: 'Kopírovanie zlyhalo — skús to znova',
-      groupTiers: 'Cenníky',
-      groupPromos: 'Akcie',
-      tradeIn: 'Výkup',
-      groupView: 'Zobrazenie',
-      helpAbout: 'Čo robí voľba: ',
-      optAlways: 'Vždy zobraziť cenníky',
-      optAlwaysHint: 'Zobrazí Vaše zapnuté cenníky vždy, aj keď pri cenníku nie je zľava alebo majú všetky cenníky rovnakú cenu.',
-      optLeft: 'Presunúť cenník doľava',
-      optLeftHint: 'Presunie cenník z pravého stĺpca pod miniatúry fotiek vľavo.',
-      clear: 'Zmazať',
-      clearAffiliate: 'Zmazať affiliate',
-      whatIsAffiliate: 'Čo je affiliate',
-      affiliateHint: 'Číslo partnera, ktoré sa pridá do kopírovaného odkazu ako ?idp=číslo.',
-      version: 'Verzia ',
-      sourceCode: 'Zdrojový kód',
-      loading: 'Načítavam…',
-      pricesLoaded: 'Ceny načítané: ',
-    },
-    en: {
-      others: 'OTHERS',
-      pricesWith: 'Prices with ',
-      priceWith: 'Price with ',
-      prices: 'Prices ',
-      price: 'Price ',
-      withWord: 'With ',
-      withCode: 'With code ',
-      promoDefault: 'Special price',
-      tableLabel: 'Prices by price list: ',
-      thTier: 'Price list',
-      thPrice: 'Price',
-      thDiscount: 'Discount',
-      originalPrice: 'Original price',
-      settingsTitle: 'Price list settings',
-      copyOffer: 'Copy offer',
-      equalNotice: 'All price lists have the same price',
-      loadError: 'The prices could not be loaded. Try reloading the page.',
-      createdBy: 'Created by ',
-      productFallback: 'Alza product',
-      originalColon: 'Original price: ',
-      link: 'Link ➤ ',
-      copied: 'Copied',
-      copyFailedTitle: 'Copying failed — try again',
-      groupTiers: 'Price lists',
-      groupPromos: 'Promotions',
-      tradeIn: 'Trade-in',
-      groupView: 'Display',
-      helpAbout: 'What the option does: ',
-      optAlways: 'Always show price lists',
-      optAlwaysHint: 'Always shows your enabled price lists, even when a price list has no discount or all price lists have the same price.',
-      optLeft: 'Move the price list to the left',
-      optLeftHint: 'Moves the price list from the right column to the left, below the product photo thumbnails.',
-      clear: 'Clear',
-      clearAffiliate: 'Clear affiliate',
-      whatIsAffiliate: 'What is affiliate',
-      affiliateHint: 'The partner number that is added to the copied link as ?idp=number.',
-      version: 'Version ',
-      sourceCode: 'Source code',
-      loading: 'Loading…',
-      pricesLoaded: 'Prices loaded: ',
-    },
-    de: {
-      others: 'SONSTIGE',
-      pricesWith: 'Preise mit ',
-      priceWith: 'Preis mit ',
-      prices: 'Preise ',
-      price: 'Preis ',
-      withWord: 'Mit ',
-      withCode: 'Mit Code ',
-      promoDefault: 'Aktionspreis',
-      tableLabel: 'Preise der Preislisten: ',
-      thTier: 'Preisliste',
-      thPrice: 'Preis',
-      thDiscount: 'Rabatt',
-      originalPrice: 'Ursprünglicher Preis',
-      settingsTitle: 'Einstellungen der Preislisten',
-      copyOffer: 'Angebot kopieren',
-      equalNotice: 'Alle Preislisten haben denselben Preis',
-      loadError: 'Die Preise konnten nicht geladen werden. Versuche, die Seite neu zu laden.',
-      createdBy: 'Erstellt von ',
-      productFallback: 'Alza-Produkt',
-      originalColon: 'Ursprünglicher Preis: ',
-      link: 'Link ➤ ',
-      copied: 'Kopiert',
-      copyFailedTitle: 'Kopieren fehlgeschlagen — versuche es erneut',
-      groupTiers: 'Preislisten',
-      groupPromos: 'Aktionen',
-      tradeIn: 'Inzahlungnahme',
-      groupView: 'Anzeige',
-      helpAbout: 'Was die Option bewirkt: ',
-      optAlways: 'Preislisten immer anzeigen',
-      optAlwaysHint: 'Zeigt deine aktivierten Preislisten immer an, auch wenn eine Preisliste keinen Rabatt hat oder alle Preislisten denselben Preis haben.',
-      optLeft: 'Preisliste nach links verschieben',
-      optLeftHint: 'Verschiebt die Preisliste aus der rechten Spalte nach links unter die Miniaturen der Produktfotos.',
-      clear: 'Löschen',
-      clearAffiliate: 'Affiliate löschen',
-      whatIsAffiliate: 'Was ist Affiliate',
-      affiliateHint: 'Die Partnernummer, die dem kopierten Link als ?idp=Nummer hinzugefügt wird.',
-      version: 'Version ',
-      sourceCode: 'Quellcode',
-      loading: 'Wird geladen…',
-      pricesLoaded: 'Preise geladen: ',
-    },
-    hu: {
-      others: 'EGYÉB',
-      pricesWith: 'Árak – ',
-      priceWith: 'Ár – ',
-      prices: 'Árak ',
-      price: 'Ár ',
-      withWord: '',
-      withCode: 'kód ',
-      promoDefault: 'Akciós ár',
-      tableLabel: 'Az árlisták árai: ',
-      thTier: 'Árlista',
-      thPrice: 'Ár',
-      thDiscount: 'Kedvezmény',
-      originalPrice: 'Eredeti ár',
-      settingsTitle: 'Az árlisták beállításai',
-      copyOffer: 'Ajánlat másolása',
-      equalNotice: 'Minden árlistának ugyanaz az ára',
-      loadError: 'Az árakat nem sikerült betölteni. Próbáld újratölteni az oldalt.',
-      createdBy: 'Készítette: ',
-      productFallback: 'Alza termék',
-      originalColon: 'Eredeti ár: ',
-      link: 'Link ➤ ',
-      copied: 'Másolva',
-      copyFailedTitle: 'A másolás nem sikerült — próbáld újra',
-      groupTiers: 'Árlisták',
-      groupPromos: 'Akciók',
-      tradeIn: 'Beszámítás',
-      groupView: 'Megjelenítés',
-      helpAbout: 'Mit csinál a beállítás: ',
-      optAlways: 'Árlisták mindig megjelenítése',
-      optAlwaysHint: 'A bekapcsolt árlistákat mindig megjeleníti, akkor is, ha egy árlistának nincs kedvezménye, vagy minden árlistának ugyanaz az ára.',
-      optLeft: 'Árlista áthelyezése balra',
-      optLeftHint: 'Az árlistát a jobb oszlopból balra, a termékfotók bélyegképei alá helyezi át.',
-      clear: 'Törlés',
-      clearAffiliate: 'Affiliate törlése',
-      whatIsAffiliate: 'Mi az az affiliate',
-      affiliateHint: 'A partnerszám, amely ?idp=szám formában kerül a másolt linkhez.',
-      version: 'Verzió ',
-      sourceCode: 'Forráskód',
-      loading: 'Betöltés…',
-      pricesLoaded: 'Árak betöltve: ',
-    },
+  const T = {
+    others: 'OSTATNÍ',
+    pricesWith: 'Ceny s ',
+    priceWith: 'Cena s ',
+    prices: 'Ceny ',
+    price: 'Cena ',
+    withWord: 'S ',
+    withCode: 'S kódem ',
+    promoDefault: 'Akční cena',
+    tableLabel: 'Ceny ceníků: ',
+    thTier: 'Ceník',
+    thPrice: 'Cena',
+    thDiscount: 'Sleva',
+    originalPrice: 'Původní cena',
+    settingsTitle: 'Nastavení ceníků',
+    copyOffer: 'Kopírovat nabídku',
+    equalNotice: 'Všechny ceníky mají stejnou cenu',
+    loadError: 'Ceny se nepodařilo načíst. Zkus obnovit stránku.',
+    createdBy: 'Vytvořil ',
+    productFallback: 'Produkt Alza',
+    originalColon: 'Původní cena: ',
+    link: 'Odkaz ➤ ',
+    copied: 'Zkopírováno',
+    copyFailedTitle: 'Kopírování selhalo — zkus to znovu',
+    groupTiers: 'Ceníky',
+    groupPromos: 'Akce',
+    tradeIn: 'Výkup',
+    groupView: 'Zobrazení',
+    helpAbout: 'Co dělá volba: ',
+    optAlways: 'Vždy zobrazit ceníky',
+    optAlwaysHint: 'Zobrazí Vaše zapnuté ceníky vždycky, i když není u ceníku sleva nebo jsou všechny ceníky se stejnou cenou.',
+    optLeft: 'Přesunout ceník doleva',
+    optLeftHint: 'Přesune ceník z pravého sloupce pod miniatury fotek vlevo.',
+    loading: 'Načítání…',
+    pricesLoaded: 'Ceny načteny: ',
   };
 
-  // Console messages (always English).
+  // Console messages.
   const LOG = {
     noStorage: 'The extension does not provide settings storage. Check the script permissions.',
     noStorageWrite: 'The extension does not provide settings storage.',
     logSetting: 'Setting ',
-    settingOn: 'set',
-    settingOff: 'cleared',
     saveFailed: 'The setting could not be saved: ',
     logVersion: 'Version ',
     logMobile: ' (mobile version)',
@@ -322,20 +122,11 @@
     isicEstimate: 'ISIC: with cashback the API returns the same price as for Basic, price worked out (ISIC price − cashback): ',
   };
 
-  function pageLanguage() {
-    if (/^\/en(?:\/|$)/i.test(location.pathname)) return 'en';
-    return { SK: 'sk', HU: 'hu', DE: 'de', AT: 'de' }[country] || 'cs';
-  }
-  let activeLanguage = pageLanguage();
-  let T = TEXTS[activeLanguage];
   const CACHE_TTL = 5 * 60 * 1000;
   const CACHE_LIMIT = 60;
-  // Shared by all panels, so returning to a product reuses its prices.
   const cache = new Map();
-  // Deduplicates concurrent network requests for the same URL.
   const inFlight = new Map();
 
-  // Console output in the style of Hlídač shopů: a coloured prefix, then a short sentence.
   const LOG_STYLE = 'background:#545fef;color:#fff;border-radius:3px;padding:1px 6px;font-weight:600';
   const logHead = ['%cAlza Benefit Prices%c', LOG_STYLE, ''];
   const log = (message, ...details) => console.info(...logHead, message, ...details);
@@ -347,7 +138,6 @@
       || (typeof GM !== 'undefined' && GM.info?.script?.version) || '';
   }
 
-  // Safari Userscripts exposes asynchronous GM.* storage APIs.
   async function getSetting(key, fallback) {
     if (typeof GM !== 'undefined' && typeof GM.getValue === 'function') return await GM.getValue(key, fallback);
     if (typeof GM_getValue === 'function') return await GM_getValue(key, fallback);
@@ -360,7 +150,7 @@
     throw new Error(LOG.noStorageWrite);
   }
 
-  const ALL_TIERS = [
+  const TIERS = [
     { name: 'Gold', pgrik: 'p_pg4_e6c95' },
     { name: 'Silver', pgrik: 'p_pg3_36eef' },
     { name: 'ISIC', pgrik: 'p_pg3is1_2b2fc' },
@@ -368,20 +158,17 @@
     { name: 'B2B', pgrik: 'p_pg6_6ce49' },
     { name: 'Basic', pgrik: 'p__26752', reference: true, badge: 'regular' },
   ];
-  const TIERS = hasIsic ? ALL_TIERS : ALL_TIERS.filter(tier => tier.name !== 'ISIC');
 
-  // Unified settings loader with seamless migration from legacy individual keys.
   async function loadSettings() {
     const unified = await getSetting('settings', null);
     if (unified && typeof unified === 'object') return unified;
-    const [tiers, plus, cashback, tradeIn, always, belowPhoto, idp] = await Promise.all([
+    const [tiers, plus, cashback, tradeIn, always, belowPhoto] = await Promise.all([
       getSetting('enabled-price-tiers', {}),
       getSetting('alza-plus-promos', true),
       getSetting('cashback-price-promos', true),
       getSetting('trade-in-promos', true),
       getSetting('always-show-tiers', false),
       getSetting('panel-below-photo', false),
-      getSetting('affiliate-idp', ''),
     ]);
     const migrated = {
       'enabled-price-tiers': tiers && typeof tiers === 'object' ? tiers : {},
@@ -390,7 +177,6 @@
       'trade-in-promos': tradeIn !== false,
       'always-show-tiers': always === true,
       'panel-below-photo': belowPhoto === true,
-      'affiliate-idp': String(idp ?? ''),
     };
     setSetting('settings', migrated).catch(() => {});
     return migrated;
@@ -405,12 +191,11 @@
   let alwaysShow = storedSettings['always-show-tiers'] === true;
   let belowPhoto = storedSettings['panel-below-photo'] === true;
   let belowPhotoOption = null;
-  let affiliateId = String(storedSettings['affiliate-idp'] ?? '').replace(/\D/g, '').slice(0, 12);
 
   let settingWrites = Promise.resolve();
   function saveSetting(key, value) {
     storedSettings[key] = value;
-    log(LOG.logSetting + key + ' = ' + (key === 'affiliate-idp' ? (value ? LOG.settingOn : LOG.settingOff) : JSON.stringify(value)));
+    log(LOG.logSetting + key + ' = ' + JSON.stringify(value));
     const snapshot = { ...storedSettings, 'enabled-price-tiers': { ...storedSettings['enabled-price-tiers'] } };
     settingWrites = settingWrites.then(() => setSetting('settings', snapshot))
       .catch(error => warn(LOG.saveFailed + error.message));
@@ -419,7 +204,7 @@
   log(LOG.logVersion + (scriptVersion() || '?') + ' — ' + location.hostname + (mobile ? LOG.logMobile : '') + LOG.logCountry + country);
   debug(LOG.logSettings, {
     'enabled-price-tiers': { ...enabled }, 'alza-plus-promos': alzaPlusPromos, 'cashback-price-promos': cashbackPromos,
-    'trade-in-promos': tradeInPromos, 'always-show-tiers': alwaysShow, 'panel-below-photo': belowPhoto, 'affiliate-idp': Boolean(affiliateId),
+    'trade-in-promos': tradeInPromos, 'always-show-tiers': alwaysShow, 'panel-below-photo': belowPhoto,
   });
 
   let activeId = null;
@@ -439,7 +224,6 @@
     return url.href;
   }
 
-  // The same API data is read by the table and by the copied offer, so each result is computed once.
   const priceMemo = new WeakMap();
   function extractPrice(data, reference = false, promos = { plus: alzaPlusPromos, cashback: cashbackPromos, tradeIn: tradeInPromos }) {
     if (!data || typeof data !== 'object') return computePrice(data, reference, promos);
@@ -454,7 +238,6 @@
     function findPricing(value, depth = 0) {
       if (!value || typeof value !== 'object' || depth > 15) return null;
       if (value.mainPriceTag || Array.isArray(value.promoPrices)) return value;
-      // Skip traversing arrays; pricing objects live in plain object properties.
       if (Array.isArray(value)) return null;
       for (const child of Object.values(value)) {
         const result = findPricing(child, depth + 1);
@@ -466,15 +249,12 @@
       ? data.data : findPricing(data);
     if (!pricing) return null;
     const main = pricing.mainPriceTag;
-    // "Novinka" uses priceType 7 while its priceGroupType can remain zero.
     if (!reference && main?.priceGroupType === 0 && main.priceType !== 7) return { hidden: true };
     function candidate(value, promo = false) {
       if (!value || !['string', 'number'].includes(typeof value.primaryPrice)) return null;
       const price = String(value.primaryPrice).trim();
-      let numeric = price.replace(/\s/g, '').replace(/(?:Kč|CZK|€|EUR|Ft|HUF)$/i, '').replace(/[,.][-–—]$/, '');
-      // In Alza's locales (CZ, SK, HU, DE, AT), dots are thousand separators when a comma is present,
-      // when the currency has no decimals (HU), or when formatted in 3-digit groups.
-      if (numeric.includes(',') || country === 'HU' || /^\d{1,3}(?:\.\d{3})+$/.test(numeric)) {
+      let numeric = price.replace(/\s/g, '').replace(/(?:Kč|CZK)$/i, '').replace(/[,.][-–—]$/, '');
+      if (numeric.includes(',') || /^\d{1,3}(?:\.\d{3})+$/.test(numeric)) {
         numeric = numeric.replace(/\./g, '');
       }
       if (!/^\d+(?:[,.]\d{1,2})?$/.test(numeric)) return null;
@@ -486,7 +266,6 @@
         coupon: promo && typeof value.discountCouponCode === 'string' ? value.discountCouponCode.trim() : '',
       };
     }
-    // Prefer the main price on a tie, so a coupon is shown only if it saves money.
     const mainCandidate = candidate(main);
     let selected = mainCandidate;
     for (const promo of Array.isArray(pricing.promoPrices) ? pricing.promoPrices : []) {
@@ -567,13 +346,11 @@
   }
 
   function formatPrice(amount) {
-    if (euro) return (Number.isInteger(amount) ? priceFormat : centsFormat).format(amount) + ' €';
-    if (country === 'HU') return priceFormat.format(amount) + ' Ft';
     return priceFormat.format(amount) + ' Kč';
   }
 
   function formatPanelPrice(amount) {
-    return country === 'CZ' ? priceFormat.format(amount) + ',-' : formatPrice(amount);
+    return priceFormat.format(amount) + ',-';
   }
 
   function formatDiscount(percent) {
@@ -587,7 +364,7 @@
     const cashbackAmount = basic.mainAmount - basic.amount;
     const raw = isic.mainAmount - cashbackAmount;
     if (!(cashbackAmount > 0 && raw > 0)) return isic;
-    const amount = euro ? Math.round(raw * 100) / 100 : Math.round(raw);
+    const amount = Math.round(raw);
     const base = isic.discountBaseAmount;
     const percent = base > amount ? (base - amount) / base * 100 : null;
     log(LOG.isicEstimate + formatPrice(amount) + (percent ? ' (' + formatDiscount(percent) + ')' : ''));
@@ -769,11 +546,12 @@
   .gear:hover,.gear[aria-expanded="true"]{background:#f5f5f5;color:#000}
   .gear.done{background:#e9f7e1;border-color:#5dbd2f;color:#2f7a12}
   .gear.failed{border-color:#ca0505;color:#ca0505}
-  .gear:focus-visible,input:focus-visible,.settings-info a:focus-visible,.credit a:focus-visible{outline:2px solid #545fef;outline-offset:2px}
+  .gear:focus-visible,input:focus-visible,.credit a:focus-visible{outline:2px solid #545fef;outline-offset:2px}
   .price-notice{flex:1;color:#606060;font-size:13px}
   .footer-message .credit{margin-top:0;padding:0 4px;justify-content:flex-start}
   .footer-message .gear{flex-shrink:0}
   .load-error{color:#ca0505}
+  .credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 
   /* Settings */
   .settings{display:grid;gap:16px;padding:0 8px 12px;margin-top:8px}
@@ -785,18 +563,11 @@
   .view-options{display:flex;flex-wrap:wrap;gap:4px 20px}
   .view-options .option{display:contents}
   .option-row{display:flex;align-items:center;gap:8px}
-  .idp-wrap{position:relative;display:inline-flex;align-items:center}
-  .idp-clear{position:absolute;right:4px;width:22px;height:22px;padding:0;border:0;border-radius:50%;background:transparent;color:#6b6b6b;font-size:16px;line-height:1;cursor:pointer}
-  .idp-clear:hover{background:#f0f0f0;color:#000}
-  .idp-clear:focus-visible{outline:2px solid #545fef;outline-offset:1px}
-  .settings .idp-input{width:110px;height:30px;padding:0 28px 0 8px;border:1px solid #c2c2c2;border-radius:8px;background:#fff;color:#000;font-size:13px}
   .help{flex-shrink:0;width:22px;height:22px;padding:0;border:1px solid #e8e8e8;border-radius:50%;background:#fff;color:#6b6b6b;font-size:12px;font-weight:600;line-height:1;cursor:pointer}
   .help:hover{background:#f5f5f5;color:#000}
   .help:focus-visible{outline:2px solid #545fef;outline-offset:2px}
   .tip{position:absolute;z-index:10;padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;background:#f5f5f5;color:#000;font-size:12px;line-height:1.5;pointer-events:none;text-wrap:pretty;box-shadow:0 4px 16px rgba(0,0,0,.12)}
   .settings-group{padding-top:12px!important;border-top:1px solid #e8e8e8!important}
-  .settings-info{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding-top:12px;border-top:1px solid #e8e8e8;color:#6b6b6b;font-size:12px}
-  .settings-info a,.credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
   .settings-only{border:0;padding:0}
   .settings-only .credit{margin-top:0;justify-content:flex-end}
 
@@ -883,8 +654,8 @@
     loadError.className = 'price-notice load-error';
     loadError.hidden = true;
     const credit = node('span', T.createdBy, footer);
-    const creditLink = node('a', 'Dexnis', credit);
-    creditLink.href = 'https://github.com/dexnis-dev';
+    const creditLink = node('a', 'FejbyK', credit);
+    creditLink.href = 'https://github.com/FejbyK';
     creditLink.target = '_blank';
     creditLink.rel = 'noopener noreferrer';
     const settings = node('div', null, section);
@@ -996,12 +767,11 @@
         lines.push(blocks.join('\n'));
       }
       const url = new URL(location.href);
-      url.hostname = url.hostname.replace(/^(?:m\.|www\.)?(alza\.(?:cz|sk|hu|de|at))$/i, 'www.$1');
+      url.hostname = url.hostname.replace(/^(?:m\.|www\.)?(alza\.cz)$/i, 'www.$1');
       url.pathname = url.pathname.replace(/^\/en(?=\/)/i, '');
       const variant = url.searchParams.get('dq');
       url.search = '';
       if (variant !== null) url.searchParams.set('dq', variant);
-      if (affiliateId) url.searchParams.set('idp', affiliateId);
       url.hash = '';
       lines.push('', T.link + url.href);
       return lines.join('\n');
@@ -1079,57 +849,10 @@
         mount(host);
       });
     belowPhotoOption.hidden = true;
-    const idpRow = addGroup('Affiliate', 'option-row');
-    const idpWrap = node('span', null, idpRow);
-    idpWrap.className = 'idp-wrap';
-    const idpInput = node('input', null, idpWrap);
-    idpInput.setAttribute('aria-label', 'Affiliate');
-    idpInput.type = 'text';
-    idpInput.inputMode = 'numeric';
-    idpInput.maxLength = 12;
-    idpInput.placeholder = '1234';
-    idpInput.className = 'idp-input';
-    idpInput.value = affiliateId;
-    const idpClear = node('button', '×', idpWrap);
-    idpClear.className = 'idp-clear';
-    idpClear.type = 'button';
-    idpClear.title = T.clear;
-    idpClear.setAttribute('aria-label', T.clearAffiliate);
-    idpClear.hidden = !affiliateId;
-    const idpHelp = node('button', '?', idpRow);
-    idpHelp.className = 'help';
-    idpHelp.type = 'button';
-    idpHelp.setAttribute('aria-label', T.whatIsAffiliate);
-    attachHelp(idpHelp, T.affiliateHint);
-    function saveAffiliate() {
-      affiliateId = idpInput.value;
-      idpClear.hidden = !affiliateId;
-      saveSetting('affiliate-idp', affiliateId);
-    }
-    idpInput.oninput = () => {
-      const digits = idpInput.value.replace(/\D/g, '');
-      if (digits !== idpInput.value) idpInput.value = digits;
-      idpClear.hidden = !digits;
-    };
-    idpInput.onchange = saveAffiliate;
-    idpClear.onclick = () => {
-      idpInput.value = '';
-      saveAffiliate();
-      idpInput.focus();
-    };
-    const info = node('div', null, settings);
-    info.className = 'settings-info';
-    const version = scriptVersion();
-    node('span', version ? T.version + version : 'Alza Benefit Prices', info);
-    const sourceLink = node('a', T.sourceCode, info);
-    sourceLink.href = 'https://github.com/dexnis-dev/Alza-Benefit-Prices/';
-    sourceLink.target = '_blank';
-    sourceLink.rel = 'noopener noreferrer';
     mount(host);
     return state;
   }
 
-  // Raw API data of one tier, from the shared cache, in-flight map, or network.
   async function tierData(id, tier, run, allowStale = false) {
     const url = apiUrl(id, tier);
     const cached = cache.get(url);
@@ -1165,7 +888,6 @@
     return run !== null && run !== generation ? null : data;
   }
 
-  // The offer to copy: invoked on-demand when the user clicks the copy button.
   async function buildOffer(id, allowStale = false) {
     const all = { plus: true, cashback: true, tradeIn: true };
     const found = await Promise.all(TIERS.map(async tier => {
@@ -1345,8 +1067,6 @@
       state.section.setAttribute('aria-busy', 'false');
       state.loaded = true;
       state.host.hidden = false;
-      // Show the copy button whenever at least one price was retrieved from the API,
-      // without triggering background requests for disabled tiers until clicked.
       state.copy.hidden = !anyValidOrCompared;
     }
   }
@@ -1388,10 +1108,7 @@
 
   function sync() {
     const id = productId(location.pathname, location.search);
-    const language = pageLanguage();
-    if (id !== activeId || language !== activeLanguage) {
-      activeLanguage = language;
-      T = TEXTS[language];
+    if (id !== activeId) {
       cancel();
       clearTimeout(reloadTimer);
       mountObserver.disconnect();
@@ -1413,7 +1130,6 @@
 
   sync();
 
-  // Use the Navigation API where supported; only fall back to polling in older browsers.
   const hasNavigationApi = typeof window.navigation?.addEventListener === 'function';
   if (hasNavigationApi) {
     window.navigation.addEventListener('currententrychange', sync);
